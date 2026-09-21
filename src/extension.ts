@@ -1,3 +1,9 @@
+import { PrdImportService } from './application/documents/PrdImportService';
+import { PrdStateService } from './application/documents/PrdStateService';
+import { VscodeDocumentDiscovery } from './infrastructure/documents/VscodeDocumentDiscovery';
+import { VscodeDocumentReader } from './infrastructure/documents/VscodeDocumentReader';
+import { registerPrdCommands } from './presentation/commands/prdCommands';
+import { selectProjectWorkspace } from './presentation/commands/workspaceSelection';
 import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
 import { getControlCenterState } from './application/controlCenterState';
@@ -19,7 +25,16 @@ export function activate(context: vscode.ExtensionContext): void {
     new WorkspaceModelSelectionStore(context.workspaceState), gateway,
   );
   const workspace = new VscodeProjectWorkspace();
-  const projects = new ProjectService(workspace, models, new VscodeProjectStorage(log), randomUUID, () => new Date());
+  const storage = new VscodeProjectStorage(log);
+  const reader = new VscodeDocumentReader();
+  const projects = new ProjectService(workspace, models, storage, randomUUID, () => new Date(), new PrdStateService(reader));
+  const prds = new PrdImportService(workspace, storage, new VscodeDocumentDiscovery(), reader, () => new Date());
+  const chooseWorkspace = async (force = false): Promise<boolean> => {
+    const previous = workspace.current()?.key;
+    const selected = await selectProjectWorkspace(workspace, force);
+    if (selected && workspace.current()?.key !== previous) await projects.refresh();
+    return selected;
+  };
   const provider = new ControlCenterViewProvider(context.extensionUri, () => ({
     ...getControlCenterState(vscode.workspace.workspaceFolders?.map((folder) => ({
       name: folder.name, path: folder.uri.scheme === 'file' ? folder.uri.fsPath : folder.uri.toString(),
@@ -47,7 +62,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.lm.onDidChangeChatModels(refreshModels),
     context.languageModelAccessInformation.onDidChange(refreshModels),
     vscode.window.registerWebviewViewProvider(ControlCenterViewProvider.viewType, provider),
-    ...registerModelCommands(models), registerProjectCommands(projects, log),
+    ...registerModelCommands(models), registerProjectCommands(projects, log, chooseWorkspace),
+    ...registerPrdCommands(prds, projects, chooseWorkspace, log),
   );
   refreshProjects();
   refreshModels();

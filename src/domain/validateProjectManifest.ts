@@ -1,11 +1,13 @@
+import { documentFormat, validateDocumentPath } from './documentPath';
+import { HARD_MAX_DOCUMENT_BYTES, type PrdInput } from './document';
 import { ProjectFailure } from './ProjectFailure';
 import { PROJECT_SCHEMA_VERSION, PROJECT_SOURCES, type ProjectManifest, type ProjectSource } from './project';
 
 function invalid(): never { throw new ProjectFailure('INVALID_MANIFEST'); }
-function record(value: unknown, keys: readonly string[]): Record<string, unknown> {
+function record(value: unknown, keys: readonly string[], optional: readonly string[] = []): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return invalid();
   const result: Record<string, unknown> = value as Record<string, unknown>;
-  if (Object.keys(result).some((key) => !keys.includes(key)) || keys.some((key) => !Object.hasOwn(result, key))) return invalid();
+  if (Object.keys(result).some((key) => !keys.includes(key) && !optional.includes(key)) || keys.some((key) => !Object.hasOwn(result, key))) return invalid();
   return result;
 }
 function text(value: unknown): string {
@@ -31,7 +33,7 @@ export function validateProjectManifest(value: unknown): ProjectManifest {
     if (typeof value.schemaVersion === 'number') throw new ProjectFailure('UNSUPPORTED_SCHEMA');
     return invalid();
   }
-  const root = record(value, ['schemaVersion', 'project', 'workspace', 'ai']);
+  const root = record(value, ['schemaVersion', 'project', 'workspace', 'ai'], ['inputs']);
   const project = record(root.project, ['id', 'name', 'status', 'source', 'createdAt', 'updatedAt']);
   const workspace = record(root.workspace, ['relativeRoot']);
   const ai = record(root.ai, ['reasoningModel']);
@@ -43,7 +45,25 @@ export function validateProjectManifest(value: unknown): ProjectManifest {
   const createdAt = timestamp(project.createdAt);
   const updatedAt = timestamp(project.updatedAt);
   if (Date.parse(updatedAt) < Date.parse(createdAt)) return invalid();
+  let inputs: { prd?: PrdInput } | undefined;
+  if (Object.hasOwn(root, 'inputs')) {
+    const rawInputs = record(root.inputs, [], ['prd']);
+    inputs = {};
+    if (Object.hasOwn(rawInputs, 'prd')) {
+      const prd = record(rawInputs.prd, ['relativePath', 'format', 'sizeBytes', 'importedAt', 'contentHash']);
+      let relativePath: string;
+      try {
+        relativePath = validateDocumentPath(prd.relativePath);
+        if (documentFormat(relativePath) !== prd.format) return invalid();
+      } catch { return invalid(); }
+      if (prd.format !== 'markdown' && prd.format !== 'text') return invalid();
+      if (typeof prd.sizeBytes !== 'number' || !Number.isSafeInteger(prd.sizeBytes) || prd.sizeBytes <= 0 || prd.sizeBytes > HARD_MAX_DOCUMENT_BYTES) return invalid();
+      if (typeof prd.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(prd.contentHash)) return invalid();
+      inputs.prd = { relativePath, format: prd.format, sizeBytes: prd.sizeBytes, importedAt: timestamp(prd.importedAt), contentHash: prd.contentHash };
+    }
+  }
   return {
+    ...(inputs ? { inputs } : {}),
     schemaVersion: PROJECT_SCHEMA_VERSION,
     project: { id, name: text(project.name), status: project.status, source: project.source, createdAt, updatedAt },
     workspace: { relativeRoot: '.' },

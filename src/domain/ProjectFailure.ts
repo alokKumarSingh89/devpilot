@@ -1,4 +1,6 @@
 const messages = {
+  WORKSPACE_SELECTION_REQUIRED: 'Select the DevPilot workspace folder before continuing.',
+  CONFLICT: 'The project manifest changed. Refresh the project and select the PRD again.',
   NO_WORKSPACE: 'Open a workspace folder before initializing DevPilot.',
   UNTRUSTED: 'Trust this workspace before creating a DevPilot project.',
   WORKSPACE_CHANGED: 'The project workspace changed. Start initialization again.',

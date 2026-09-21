@@ -8,6 +8,7 @@ import { providerLabel } from './modelLabels';
 export type ModelPresentation = Pick<ReasoningModelService, 'state' | 'notice' | 'testResult' | 'testing'>;
 
 const actionIcons: Record<ControlCenterAction, IconName> = {
+  selectPrd: 'document', refreshProject: 'refresh', selectWorkspace: 'folder',
   refresh: 'refresh', select: 'change', clear: 'trash', test: 'play', initialize: 'play', openFolder: 'folder',
 };
 export function action(actionName: ControlCenterAction, label: string, secondary = false): string {

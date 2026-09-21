@@ -19,7 +19,7 @@ describe('AI configuration hierarchy', () => {
     expect(html).not.toContain('command:devpilot.clearModel');
     expect(html).not.toContain('NO_MODEL');
     expect(renderProject({ status: state.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' })).toContain('until a reasoning model is selected');
-    expect(renderProject({ status: state.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' })).not.toContain('command:');
+    expect(renderProject({ status: state.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' })).not.toContain('command:devpilot.initializeProject');
   });
 
   it('shows setup guidance and a count instead of a dense catalog', () => {
