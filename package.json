@@ -1,0 +1,60 @@
+{
+  "name": "devpilot",
+  "displayName": "DevPilot",
+  "description": "AI Engineering Control Plane for VS Code.",
+  "version": "0.0.1",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "engines": {
+    "vscode": "^1.96.0",
+    "node": ">=22.12.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "devpilot.openControlCenter",
+        "title": "Open Control Center",
+        "category": "DevPilot"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "devpilot",
+          "title": "DevPilot",
+          "icon": "media/devpilot.svg"
+        }
+      ]
+    },
+    "views": {
+      "devpilot": [
+        {
+          "type": "webview",
+          "id": "devpilot.controlCenter",
+          "name": "Control Center"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "node scripts/esbuild.mjs",
+    "watch": "node scripts/esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "vscode:prepublish": "npm run typecheck && npm test && npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "1.96.0",
+    "esbuild": "^0.28.2",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
