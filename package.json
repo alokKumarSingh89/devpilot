@@ -66,6 +66,16 @@
         "command": "devpilot.selectProjectWorkspace",
         "title": "Choose Project Folder",
         "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.analyzePrd",
+        "title": "Analyze PRD",
+        "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.openRequirements",
+        "title": "View Requirements",
+        "category": "DevPilot"
       }
     ],
     "viewsContainers": {

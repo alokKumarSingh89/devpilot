@@ -8,6 +8,7 @@ import { providerLabel } from './modelLabels';
 export type ModelPresentation = Pick<ReasoningModelService, 'state' | 'notice' | 'testResult' | 'testing'>;
 
 const actionIcons: Record<ControlCenterAction, IconName> = {
+  analyzePrd: 'sparkle', openRequirements: 'document',
   selectPrd: 'document', refreshProject: 'refresh', selectWorkspace: 'folder',
   refresh: 'refresh', select: 'change', clear: 'trash', test: 'play', initialize: 'play', openFolder: 'folder',
 };
@@ -41,7 +42,7 @@ export function renderModels(model: ModelPresentation): string {
     <div class="card-heading">${tile('sparkle')}<div class="heading-copy"><h2 id="models-heading">AI Configuration</h2>${content}</div>
       ${ready ? action('select', 'Change Model', true) : ''}
     </div>
-    ${state.status === 'READY' ? details(state.selected) : `<div class="setup-copy"><p>${state.status === 'NO_MODEL' ? 'DevPilot needs a reasoning model for:' : 'Choose the model DevPilot should use for:'}</p>${purposes}<p class="muted">These workflows will be available in a future release.</p></div>`}
+    ${state.status === 'READY' ? details(state.selected) : `<div class="setup-copy"><p>${state.status === 'NO_MODEL' ? 'DevPilot needs a reasoning model for:' : 'Choose the model DevPilot should use for:'}</p>${purposes}<p class="muted">PRD analysis is available after import. Planning, architecture, review and validation follow in future releases.</p></div>`}
     <div class="actions model-actions">
       ${ready ? `${model.testing ? '' : action('test', 'Test Model')}${action('clear', 'Clear Model', true)}` : state.status === 'SELECTION_REQUIRED' ? action('select', 'Select Reasoning Model') : ''}
       ${action('refresh', 'Refresh Models', state.status !== 'NO_MODEL')}

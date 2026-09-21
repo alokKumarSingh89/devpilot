@@ -2,13 +2,13 @@
 
 DevPilot is an AI Engineering Control Plane for VS Code. Its long-term direction is to understand PRDs and repositories, maintain structured project intelligence, plan engineering tasks, orchestrate coding agents, independently review and validate their work, and support manual development.
 
-## Current scope: TASK-DP-001 through TASK-DP-004
+## Current scope: TASK-DP-001 through TASK-DP-005
 
 This foundation registers a dedicated DevPilot Activity Bar container and the `devpilot.controlCenter` Webview View. The view displays the product name, “AI Engineering Control Plane”, a Workspace section listing current workspace folder names (or “No workspace open”), and “No project initialized”. The command **DevPilot: Open Control Center** (`devpilot.openControlCenter`) reveals the view.
 
-TASK-DP-002 adds a reasoning-model gateway using the stable VS Code Language Model API. A reasoning model is **not a coding agent**. Future reasoning uses may include PRD analysis, planning, architecture, review, and validation; none of those workflows are implemented here.
+TASK-DP-002 adds a reasoning-model gateway using the stable VS Code Language Model API. A reasoning model is **not a coding agent**. PRD analysis is implemented in TASK-DP-005; planning, architecture, review, and validation remain future scope.
 
-TASK-DP-003 adds project initialization and validated persistence in `.devpilot/project.yaml`. TASK-DP-004 adds explicit PRD discovery, safe text import, and portable source metadata. There is no AI PRD analysis, repository analysis, task planning, agent integration, Git automation, backend, or React dependency. Test Model sends only a fixed readiness prompt, never workspace files. Only the selected model ID is persisted in VS Code workspace state (`devpilot.reasoningModelId`); model objects and responses are not persisted.
+TASK-DP-003 adds project initialization and validated persistence in `.devpilot/project.yaml`. TASK-DP-004 adds explicit PRD discovery, safe text import, and portable source metadata. TASK-DP-005 adds explicitly requested AI PRD analysis and validated structured requirements. There is no repository analysis, task planning, agent integration, Git automation, backend, or React dependency. Test Model sends only a fixed readiness prompt, never workspace files. Only the selected model ID is persisted in VS Code workspace state (`devpilot.reasoningModelId`); model objects and responses are not persisted.
 
 ## Development
 
@@ -61,7 +61,7 @@ The workspace card shows actual folder names and paths. **Open Folder** uses the
 - `src/extension.ts`: composition root; wires workspace/model/manifest events, application services, view registration, and command controllers. Registrations belong to the extension context.
 - `src/domain/reasoningModel.ts`: DevPilot-owned model metadata and the discriminated `NO_MODEL` / `SELECTION_REQUIRED` / `READY` states. No VS Code imports.
 - `src/application/models/`: discovery, selection-store, cancellation, and gateway ports. `ReasoningModelService` coordinates explicit select/clear, serialized preference updates, a shared READY gate, and test results. Discovery remains a separate dependency; no extra selection wrapper is needed. Clearing never discovers, alters, or uninstalls provider models. No VS Code imports.
-- `src/infrastructure/models/vscodeModels.ts`: VS Code discovery mapping, workspace-state persistence, and LanguageModelGateway adapter. Every request resolves the selected ID afresh. The adapter forwards cancellation, consumes the text stream, bounds test output to 8,192 characters, and disposes its cancellation sources and subscriptions. Extension shutdown cancels active requests.
+- `src/infrastructure/models/vscodeModels.ts`: VS Code discovery mapping, workspace-state persistence, and LanguageModelGateway adapter. Every request resolves the selected ID afresh. The adapter forwards cancellation, consumes the text stream, bounds test output to 8,192 characters (analysis to 262,144), checks analysis token capacity, and disposes its cancellation sources and subscriptions. Extension shutdown cancels active requests.
 - `src/domain/project.ts`, `ProjectFailure.ts`, and `validateProjectManifest.ts`: portable schema V1, lifecycle/source/state types, safe errors, and strict runtime validation. No VS Code or YAML imports.
 - `src/application/projects/`: initialization use case, project state resolution, concurrency protection, and workspace/storage ports. Uses the existing reasoning-model gate without introducing another discovery implementation.
 - `src/infrastructure/projects/`: VS Code workspace selection, `workspace.fs` create-only initialization and checked metadata updates, and YAML parsing/serialization. No Node filesystem access.
@@ -77,7 +77,7 @@ The webview disables scripts and limits local resources to `media/`. Only the st
 
 ## Validation and follow-up
 
-Unit tests and compilation do not exercise the actual VS Code UI. Use the F5 checks above to verify integration and themes. Marketplace publication, publisher identity, license selection, VSIX distribution, automated Extension Host tests, and later product features are outside TASK-DP-004. This scaffold is private and unlicensed until distribution decisions are made.
+Unit tests and compilation do not exercise the actual VS Code UI. Use the F5 checks above to verify integration and themes. Marketplace publication, publisher identity, license selection, VSIX distribution, automated Extension Host tests, and later product features are outside TASK-DP-005. This scaffold is private and unlicensed until distribution decisions are made.
 
 
 ## Project initialization (TASK-DP-003)
@@ -143,7 +143,7 @@ Ranking is deterministic: exact PRD/product-requirements/requirements/spec filen
 
 Only `.md`, `.markdown`, and `.txt` are supported, case-insensitively. Files must be inside the selected root with the same URI scheme and authority. Paths are normalized workspace-relative values; absolute paths, traversal, empty segments, backslashes, percent escapes, and control characters are rejected. The reader uses `workspace.fs`, checks parent folders and file types, and rejects provider-reported symlinks. It checks size before and after reading, rejects empty/whitespace-only files, invalid UTF-8 and binary control characters, and never truncates content.
 
-The default limit is **1 MiB**, configurable with `devpilot.documents.maxBytes` (1 byte–16 MiB). SHA-256 is calculated over the original bytes, including any UTF-8 BOM. Text exists only transiently during reading; it is neither persisted in YAML nor sent to a model. No analysis, requirements extraction, repository analysis, or coding-agent execution occurs.
+The default limit is **1 MiB**, configurable with `devpilot.documents.maxBytes` (1 byte–16 MiB). SHA-256 is calculated over the original bytes, including any UTF-8 BOM. Import itself reads text transiently without persisting it in YAML or sending it to a model. TASK-DP-005 adds a separate explicit Analyze PRD action described below; import still triggers no analysis.
 
 Manifest schema remains **1**. Old manifests without inputs remain valid. A successful explicit import adds optional metadata:
 
@@ -161,7 +161,7 @@ The hash above illustrates the 64-character lowercase hexadecimal shape; actual 
 
 Updates recheck the manifest before writing a temporary file and again before replacing the destination. Stale picker snapshots and detected concurrent edits are rejected; failures clean up temporary files where possible. VS Code's filesystem API has no compare-and-swap transaction: a narrow race remains between the last check and rename, and atomicity depends on the provider. Avoid simultaneous external manifest edits during import. Provider-reported symlink checks cannot eliminate filesystem races; a file growing after stat may be allocated by `readFile` before the post-read limit rejects it.
 
-PRD state is separate from project lifecycle: **Not selected**, **Selected**, **Missing**, **Changed**, or **Unavailable** for validation/access errors. Reload and **Refresh Project** reevaluate the saved document and hash; no polling loop is used. **Re-import PRD** opens explicit selection again and updates metadata only after a successful import. Import is local and does not require sending a model request. Existing initialization still requires AI Ready.
+PRD state is separate from project lifecycle: **Not selected**, **Selected**, **Missing**, **Changed**, or **Unavailable** for validation/access errors. Reload and **Refresh Project** reevaluate the saved document and hash; no polling loop is used. **Re-import PRD** opens explicit selection again and updates metadata only after a successful import. Import is local and does not require sending a model request; Analyze PRD does. Existing initialization still requires AI Ready.
 
 Commands added: `devpilot.selectPrd`, `devpilot.refreshProject`, and `devpilot.selectProjectWorkspace`. Command registrations follow extension disposal. The webview remains script-free, CSP-restricted, and limited to allowlisted static commands; document names and paths are escaped.
 
@@ -187,3 +187,40 @@ Start with `npm install`, then press **F5 → Run DevPilot Extension**. In the E
 9. **Invalid input:** Try a zero-byte file, whitespace-only file, and a document exceeding 1 MiB with the default setting. Each must be rejected with a concise explanation and unchanged metadata. The native picker filters unsupported extensions; where the platform permits overriding filters, choose a `.pdf` and confirm rejection. Automated reader tests also exercise unsupported extensions directly.
 
 Additional regression checks: add a second workspace folder and verify DevPilot requires an explicit root choice before project operations; cancel the root picker and verify nothing is written. Confirm a CODEBASE project has no Select PRD action and a direct **DevPilot: Select PRD** invocation is rejected. Check a narrow sidebar, keyboard navigation, light/dark/high-contrast themes, and HTML-like filenames rendered literally. Live Extension Host and remote-provider behavior require these manual checks; unit tests mock the editor boundary.
+
+
+## Structured PRD analysis (TASK-DP-005)
+
+After importing an unchanged PRD into an `INITIALIZING` PRD or PRD + Existing Code project, select an available reasoning model and click **Analyze PRD**. This explicit action sends the PRD to that model through the existing VS Code Language Model gateway. A cancellable notification shows progress. Refresh, reload, initialization and import never trigger analysis automatically.
+
+Successful analysis creates **`.devpilot/product/requirements.yaml`** with versioned product information, actors, functional/non-functional requirements, constraints, out-of-scope items, and open questions. Every traced item has bounded source evidence; provenance records the project UUID, imported path/hash, generation time and actual model ID/vendor/family. Project metadata is unchanged and lifecycle remains **Initializing**. **View Requirements** opens the YAML in the editor for review; **Re-analyze PRD** generates a complete validated replacement. There is no merge/reconciliation or developer approval state yet.
+
+Read [Requirements artifact V1](docs/requirements-schema.md) for the exact field constraints, ID strategy, JSON extraction policy, trust boundaries, context limits, state model, and filesystem guarantees. DevPilot rejects malformed output rather than silently repairing or trusting it. Valid structure and matching evidence still require human review for meaning and completeness.
+
+Architecture additions:
+
+- `src/domain/requirements/`: owned requirements/analysis types, enums, limits, safe failures, and strict runtime validators.
+- `src/application/analysis/`: prompt compiler, response parser, canonical IDs, analysis orchestrator, cancellation scope, and storage port. No VS Code imports; no commands or model output execute code.
+- `src/infrastructure/requirements/`: bounded YAML loading/serialization and temporary-file replacement through `workspace.fs`.
+- Existing reasoning gateway: fresh model resolution, token checks and bounded cancellable streaming; existing Test Model behavior is preserved.
+- `analysisCommands.ts` and `renderAnalysis.ts`: explicit commands/progress/editor opening and escaped summary rendering. The webview remains script-free with its existing CSP and static command allowlist.
+
+Added commands: `devpilot.analyzePrd` and `devpilot.openRequirements`. No new dependencies or settings were required. Requirements artifact watchers, analysis listeners and cancellation scopes belong to the extension lifecycle.
+
+### TASK-DP-005 manual acceptance
+
+Run `npm run typecheck`, `npm test`, and `npm run compile`. Press **F5 → Run DevPilot Extension**. In the Extension Development Host, open the folder containing your DP-004 DevTask PRD, open **DevPilot: Open Control Center**, explicitly choose the correct root if multiple folders are open, and select an available reasoning model. Initialize/import the DevTask PRD if needed. Confirm the PRD state is **Selected** and project status **Initializing**. Use saved document contents; unsaved editor changes are not imported or analyzed.
+
+1. **Real model request:** Click **Analyze PRD**. Accept VS Code's provider consent prompt if shown. Expect a cancellable **DevPilot: Analyze PRD** notification and **Requirements intelligence → Analyzing…**. No second analysis should run if the command is invoked again. A context-limit error requires choosing a larger model; DevPilot does not truncate the PRD.
+2. **Persistence:** After a successful response, verify `.devpilot/product/requirements.yaml` exists. The original `project.yaml` must be unchanged, including `INITIALIZING`.
+3. **Structure and evidence:** Inspect the generated product, actors, functional requirements, NFRs, constraints, out-of-scope and questions. For DevTask, review entries covering authentication, projects, tasks, task dependencies, comments, notifications, security, performance and stated constraints. Wording/counts vary by model; inspect source excerpts against the PRD and flag omissions or misleading interpretations. Verify the stored source hash matches `project.yaml` and the generating model matches the selected model.
+4. **Summary/reload:** Verify **Requirements intelligence → Analyzed**, counts for functional requirements, NFRs, constraints and open questions, and the generating model family. Run **Developer: Reload Window** (reselect the root for multi-root) and verify the same artifact/summary returns without a model call.
+5. **Editor review:** Click **View Requirements** or run **DevPilot: View Requirements**. The selected root's `.devpilot/product/requirements.yaml` must open in VS Code.
+6. **Changed PRD:** Edit and save `PRD.md` without re-importing, then **Refresh Project**. Expect PRD **Changed** and no Analyze/Re-analyze action. Invoke **DevPilot: Analyze PRD** directly: it must reject with a re-import explanation and preserve the artifact.
+7. **Re-import/re-analysis:** Re-import the saved changed PRD. Expect requirements **Stale** until you explicitly analyze again. A successful re-analysis replaces the complete requirements artifact, restores **Analyzed**, and keeps the project **Initializing**.
+8. **Cancellation:** Start re-analysis, then cancel in the progress notification while the provider is responding. Expect a cancellation notice, no partial YAML and unchanged previous requirements. If no artifact existed, state returns to **Not analyzed**. Cancellation after the final rename begins cannot undo that completed commit.
+9. **Malformed output:** Run `npm test -- tests/requirementsValidation.test.ts tests/prdAnalysis.test.ts tests/requirementsStorage.test.ts`. These fake-provider tests inject malformed JSON, invalid schemas, fabricated/oversized evidence and failed writes; they assert that existing valid requirements remain intact. No AI quota is used by tests.
+
+Also verify light/dark/high-contrast themes and a narrow sidebar; model metadata, paths and error text must render literally. CODEBASE-only projects, missing PRDs, no selected reasoning model and untrusted workspaces must reject direct analysis commands. No architecture generation, codebase analysis, task planning, coding-agent integration, Git automation, or autonomous work is included.
+
+Live model quality, quota/consent, remote filesystem behavior and Extension Host UI require manual verification. The test fixture at `tests/fixtures/requirements-prd.md` is intentionally small; it is not a replacement for reviewing the full DevTask PRD output. IDs are stable for identical normalized semantic identities, but arbitrary rewording across runs requires future reconciliation. Prompt defenses and structural validation cannot establish semantic correctness by themselves.

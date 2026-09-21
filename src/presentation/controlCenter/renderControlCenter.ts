@@ -38,7 +38,7 @@ export function renderControlCenter(
     </section>
     ${state.reasoning ? renderModels(state.reasoning) : ''}
     ${renderCodingAgent()}
-    ${renderProject(state.project, state.projectFolderName)}
+    ${renderProject(state.project, state.projectFolderName, state.reasoning?.state.status === 'READY')}
     <footer><span>Build better software with AI</span></footer>
   </main>
 </body>

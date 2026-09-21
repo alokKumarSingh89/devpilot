@@ -15,6 +15,13 @@ export interface RequestCancellation {
   onCancellationRequested(listener: () => void): { dispose(): void };
 }
 
+export interface ModelRequestOptions {
+  readonly purpose: 'prdAnalysis';
+  readonly expectedModel: { readonly vendor: string; readonly family: string };
+  readonly maxResponseCharacters: number;
+  readonly outputHeadroomTokens: number;
+}
+
 export interface LanguageModelGateway {
-  sendRequest(modelId: string, prompt: string, cancellation: RequestCancellation): Promise<string>;
+  sendRequest(modelId: string, prompt: string, cancellation: RequestCancellation, options?: ModelRequestOptions): Promise<string>;
 }
