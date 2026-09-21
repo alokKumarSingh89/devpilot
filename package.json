@@ -51,6 +51,21 @@
         "command": "devpilot.openFolder",
         "title": "Open Folder",
         "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.selectPrd",
+        "title": "Select PRD",
+        "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.refreshProject",
+        "title": "Refresh Project",
+        "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.selectProjectWorkspace",
+        "title": "Choose Project Folder",
+        "category": "DevPilot"
       }
     ],
     "viewsContainers": {
@@ -70,6 +85,19 @@
           "name": "Control Center"
         }
       ]
+    },
+    "configuration": {
+      "title": "DevPilot",
+      "properties": {
+        "devpilot.documents.maxBytes": {
+          "type": "integer",
+          "default": 1048576,
+          "minimum": 1,
+          "maximum": 16777216,
+          "scope": "resource",
+          "description": "Maximum UTF-8 requirements document size in bytes. Documents exceeding this limit are rejected, never truncated."
+        }
+      }
     }
   },
   "scripts": {

@@ -114,3 +114,40 @@ describe('VS Code project filesystem adapter', () => {
     expect(host.fs.writeFile).not.toHaveBeenCalled();
   });
 });
+
+describe('explicit metadata updates', () => {
+  it('updates an existing manifest with portable metadata and preserves project identity', async () => {
+    await storage.write(workspace, projectFixture());
+    const expected = await storage.read(workspace);
+    expect(expected).toBeDefined();
+    if (!expected) throw new Error('fixture missing');
+    const next = { ...expected, inputs: { prd: { relativePath: 'docs/PRD.md', format: 'markdown' as const, sizeBytes: 12, importedAt: '2026-09-21T11:00:00.000Z', contentHash: 'a'.repeat(64) } } };
+    await storage.update(workspace, expected, next);
+    expect(await storage.read(workspace)).toEqual(next);
+    expect([...entries.keys()]).toEqual([directory, destination]);
+  });
+  it('rejects stale snapshots without overwriting the current manifest', async () => {
+    await storage.write(workspace, projectFixture());
+    const stale = { ...projectFixture(), project: { ...projectFixture().project, name: 'stale' } };
+    await expect(storage.update(workspace, stale, stale)).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await storage.read(workspace)).toEqual(projectFixture());
+  });
+  it('detects another writer during temporary-file creation and cleans up', async () => {
+    await storage.write(workspace, projectFixture());
+    const changed = { ...projectFixture(), project: { ...projectFixture().project, name: 'other writer' } };
+    host.fs.writeFile.mockImplementation(async (uri: Uri, data: Uint8Array) => {
+      entries.set(uri.key, { type: 1, bytes: data });
+      entries.set(destination, { type: 1, bytes: bytes(serializeProjectYaml(changed)) });
+    });
+    await expect(storage.update(workspace, projectFixture(), projectFixture())).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await storage.read(workspace)).toEqual(changed);
+    expect([...entries.keys()]).toEqual([directory, destination]);
+  });
+  it('leaves the old manifest intact if replacement fails', async () => {
+    await storage.write(workspace, projectFixture());
+    host.fs.rename.mockRejectedValue(new host.FsError('Unavailable'));
+    await expect(storage.update(workspace, projectFixture(), projectFixture())).rejects.toMatchObject({ code: 'WRITE_FAILED' });
+    expect(await storage.read(workspace)).toEqual(projectFixture());
+    expect([...entries.keys()]).toEqual([directory, destination]);
+  });
+});

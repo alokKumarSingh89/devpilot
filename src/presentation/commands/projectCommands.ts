@@ -10,9 +10,10 @@ const sourceChoices: readonly (vscode.QuickPickItem & { source: ProjectSource })
   { label: 'PRD + Existing Code', description: 'Compare intended requirements with the existing implementation.', detail: 'Recommended for an existing project with requirements.', source: 'PRD_AND_CODEBASE' },
 ];
 
-export function registerProjectCommands(projects: ProjectService, log: (message: string) => void): vscode.Disposable {
+export function registerProjectCommands(projects: ProjectService, log: (message: string) => void, chooseWorkspace: () => Promise<boolean> = async () => true): vscode.Disposable {
   return vscode.commands.registerCommand('devpilot.initializeProject', async () => {
     try {
+      if (!await chooseWorkspace()) return;
       const workspace = await projects.prepare();
       const selection = await vscode.window.showQuickPick(sourceChoices, {
         title: `Initialize DevPilot — ${workspace.folderName}`,

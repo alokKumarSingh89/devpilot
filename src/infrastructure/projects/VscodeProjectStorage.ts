@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
-import type { ProjectStorage, ProjectWorkspace } from '../../application/projects/ports';
+import type { ProjectStorage, ProjectUpdateStorage, ProjectWorkspace } from '../../application/projects/ports';
 import { ProjectFailure } from '../../domain/ProjectFailure';
 import type { ProjectManifest } from '../../domain/project';
 import { MAX_MANIFEST_BYTES, parseProjectYaml, serializeProjectYaml } from './projectYaml';
 
 export const PROJECT_MANIFEST_PATH = '.devpilot/project.yaml';
 
-export class VscodeProjectStorage implements ProjectStorage {
+export class VscodeProjectStorage implements ProjectStorage, ProjectUpdateStorage {
   constructor(private readonly log: (message: string) => void) {}
 
   private uri(workspace: ProjectWorkspace, ...path: string[]): vscode.Uri {
@@ -51,6 +51,33 @@ export class VscodeProjectStorage implements ProjectStorage {
       catch { throw new ProjectFailure('INVALID_MANIFEST'); }
       return parseProjectYaml(text);
     } catch (error) { throw this.failure('read', error, 'READ_FAILED'); }
+  }
+  async update(workspace: ProjectWorkspace, expected: ProjectManifest, next: ProjectManifest): Promise<void> {
+    const data = new TextEncoder().encode(serializeProjectYaml(next));
+    const temporary = this.uri(workspace, '.devpilot', `.project-${randomUUID()}.tmp`);
+    const destination = this.uri(workspace, PROJECT_MANIFEST_PATH);
+    let attempted = false;
+    const verify = async (): Promise<void> => {
+      const current = await this.read(workspace);
+      if (!current || JSON.stringify(current) !== JSON.stringify(expected) || next.project.id !== current.project.id) {
+        throw new ProjectFailure('CONFLICT');
+      }
+    };
+    try {
+      await verify();
+      attempted = true;
+      await vscode.workspace.fs.writeFile(temporary, data);
+      await verify();
+      await vscode.workspace.fs.rename(temporary, destination, { overwrite: true });
+    } catch (error) { throw this.failure('update', error, 'WRITE_FAILED'); }
+    finally {
+      if (attempted) {
+        try { await vscode.workspace.fs.delete(temporary); }
+        catch (error) {
+          if (!(error instanceof vscode.FileSystemError && error.code === 'FileNotFound')) this.log('Temporary manifest cleanup failed.');
+        }
+      }
+    }
   }
   async write(workspace: ProjectWorkspace, project: ProjectManifest): Promise<void> {
     // Serialize before any filesystem changes. The final file is never written in place.

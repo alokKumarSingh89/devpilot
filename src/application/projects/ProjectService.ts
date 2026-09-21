@@ -1,3 +1,4 @@
+import type { PrdStateService } from '../documents/PrdStateService';
 import type { ReasoningModel } from '../../domain/reasoningModel';
 import { ProjectFailure } from '../../domain/ProjectFailure';
 import { PROJECT_SCHEMA_VERSION, type ProjectManifest, type ProjectSource, type ProjectState } from '../../domain/project';
@@ -18,6 +19,7 @@ export class ProjectService {
     private readonly storage: ProjectStorage,
     private readonly createId: () => string,
     private readonly now: () => Date,
+    private readonly prdState?: PrdStateService,
   ) {}
 
   onDidChange(listener: () => void): { dispose(): void } {
@@ -31,13 +33,13 @@ export class ProjectService {
     if (this.disposed) return;
     const revision = ++this.refreshRevision;
     const workspace = this.workspace.current();
-    this.state = { status: workspace ? 'LOADING' : 'NO_WORKSPACE' };
+    this.state = { status: workspace ? 'LOADING' : this.workspace.needsSelection?.() ? 'WORKSPACE_SELECTION_REQUIRED' : 'NO_WORKSPACE' };
     this.notify();
     if (!workspace) return;
     let state: ProjectState;
     try {
       const manifest = await this.storage.read(workspace);
-      state = manifest ? { status: manifest.project.status, manifest }
+      state = manifest ? { status: manifest.project.status, manifest, ...(this.prdState ? { prd: await this.prdState.evaluate(workspace, manifest.inputs?.prd) } : {}) }
         : { status: this.models.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' };
     } catch (error) {
       state = { status: 'ERROR', message: error instanceof ProjectFailure ? error.message : new ProjectFailure('READ_FAILED').message };
@@ -50,7 +52,7 @@ export class ProjectService {
 
   private assertWorkspace(expected?: ProjectWorkspace): ProjectWorkspace {
     const current = this.workspace.current();
-    if (!current) throw new ProjectFailure('NO_WORKSPACE');
+    if (!current) throw new ProjectFailure(this.workspace.needsSelection?.() ? 'WORKSPACE_SELECTION_REQUIRED' : 'NO_WORKSPACE');
     if (this.disposed || (expected && current.key !== expected.key)) throw new ProjectFailure('WORKSPACE_CHANGED');
     if (!this.workspace.isTrusted()) throw new ProjectFailure('UNTRUSTED');
     return current;

@@ -100,3 +100,6 @@ footer::before, footer::after { content: ''; width: 50px; height: 1px; backgroun
 .project-details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 12px 0; }
 .project-details dt { color: var(--muted); }
 .project-details dd { margin: 0; }
+
+.prd-input { border-top: 1px solid var(--card-border); padding-top: 14px; margin-top: 16px; }
+.project-actions { margin-top: 16px; }

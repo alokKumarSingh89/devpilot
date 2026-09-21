@@ -6,6 +6,9 @@ export const controlCenterActions = {
   clear: 'devpilot.clearModel',
   test: 'devpilot.testModel',
   initialize: 'devpilot.initializeProject',
+  selectPrd: 'devpilot.selectPrd',
+  refreshProject: 'devpilot.refreshProject',
+  selectWorkspace: 'devpilot.selectProjectWorkspace',
 } as const;
 
 export type ControlCenterAction = keyof typeof controlCenterActions;

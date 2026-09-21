@@ -2,13 +2,13 @@
 
 DevPilot is an AI Engineering Control Plane for VS Code. Its long-term direction is to understand PRDs and repositories, maintain structured project intelligence, plan engineering tasks, orchestrate coding agents, independently review and validate their work, and support manual development.
 
-## Current scope: TASK-DP-001 through TASK-DP-003
+## Current scope: TASK-DP-001 through TASK-DP-004
 
 This foundation registers a dedicated DevPilot Activity Bar container and the `devpilot.controlCenter` Webview View. The view displays the product name, “AI Engineering Control Plane”, a Workspace section listing current workspace folder names (or “No workspace open”), and “No project initialized”. The command **DevPilot: Open Control Center** (`devpilot.openControlCenter`) reveals the view.
 
 TASK-DP-002 adds a reasoning-model gateway using the stable VS Code Language Model API. A reasoning model is **not a coding agent**. Future reasoning uses may include PRD analysis, planning, architecture, review, and validation; none of those workflows are implemented here.
 
-TASK-DP-003 adds project initialization and validated persistence in `.devpilot/project.yaml`. There is no PRD reading/analysis, repository scanning/analysis, task planning, agent integration, Git automation, backend, or React dependency. Test Model sends only a fixed readiness prompt, never workspace files. Only the selected model ID is persisted in VS Code workspace state (`devpilot.reasoningModelId`); model objects and responses are not persisted.
+TASK-DP-003 adds project initialization and validated persistence in `.devpilot/project.yaml`. TASK-DP-004 adds explicit PRD discovery, safe text import, and portable source metadata. There is no AI PRD analysis, repository analysis, task planning, agent integration, Git automation, backend, or React dependency. Test Model sends only a fixed readiness prompt, never workspace files. Only the selected model ID is persisted in VS Code workspace state (`devpilot.reasoningModelId`); model objects and responses are not persisted.
 
 ## Development
 
@@ -64,7 +64,7 @@ The workspace card shows actual folder names and paths. **Open Folder** uses the
 - `src/infrastructure/models/vscodeModels.ts`: VS Code discovery mapping, workspace-state persistence, and LanguageModelGateway adapter. Every request resolves the selected ID afresh. The adapter forwards cancellation, consumes the text stream, bounds test output to 8,192 characters, and disposes its cancellation sources and subscriptions. Extension shutdown cancels active requests.
 - `src/domain/project.ts`, `ProjectFailure.ts`, and `validateProjectManifest.ts`: portable schema V1, lifecycle/source/state types, safe errors, and strict runtime validation. No VS Code or YAML imports.
 - `src/application/projects/`: initialization use case, project state resolution, concurrency protection, and workspace/storage ports. Uses the existing reasoning-model gate without introducing another discovery implementation.
-- `src/infrastructure/projects/`: VS Code workspace selection, `workspace.fs` create-only storage, and YAML parsing/serialization. No Node filesystem access.
+- `src/infrastructure/projects/`: VS Code workspace selection, `workspace.fs` create-only initialization and checked metadata updates, and YAML parsing/serialization. No Node filesystem access.
 - `src/presentation/commands/`: model and project command controllers for Quick Pick, confirmation, notifications, and safe failures. Business rules remain in application services.
 - `src/application/controlCenterState.ts`: VS Code-independent initial view state. Opening a workspace does not initialize a DevPilot project.
 - `src/presentation/controlCenter/`: thin VS Code view adapter and pure HTML renderer. The provider handles only rendering and view lifecycle. The composition root owns the workspace-folder change subscription through `context.subscriptions`. The provider refreshes resolved views and disposes view listeners both when the view closes and when the extension is deactivated.
@@ -73,16 +73,16 @@ The workspace card shows actual folder names and paths. **Open Folder** uses the
 
 As actual features arrive, `src/core`, `src/ai`, and `src/agents` can be added alongside application and presentation. No empty layers or speculative agent abstractions are included. Application/domain logic should stay independent of VS Code; external integrations should be wired through the composition root.
 
-The webview disables scripts and limits local resources to `media/`. Only the six static commands declared in the typed `controlCenterActions` map are allowlisted; provider metadata and responses are rendered as escaped text, never links or executable markup. Commands enforce the application model gate. Its CSP denies resources by default and permits only styles from the VS Code-provided resource origin. All interpolated HTML values are escaped. There are no scripts or inline styles, so no nonce is needed. Future scripts must use a cryptographically secure nonce and an explicitly revised CSP. Styling uses VS Code theme variables. Initialization requires a trusted workspace in addition to the workspace/model gates. The extension reads only its manifest and writes only its `.devpilot` metadata; it does not read or execute repository code.
+The webview disables scripts and limits local resources to `media/`. Only the static commands declared in the typed `controlCenterActions` map are allowlisted; provider metadata and responses are rendered as escaped text, never links or executable markup. Model requests and initialization enforce the application model gate; local PRD import enforces project source, lifecycle, workspace, and trust rules without calling a model. Its CSP denies resources by default and permits only styles from the VS Code-provided resource origin. All interpolated HTML values are escaped. There are no scripts or inline styles, so no nonce is needed. Future scripts must use a cryptographically secure nonce and an explicitly revised CSP. Styling uses VS Code theme variables. Initialization requires a trusted workspace in addition to the workspace/model gates. The extension reads its manifest and explicitly selected requirements documents, and writes only its `.devpilot` metadata; it does not execute repository code.
 
 ## Validation and follow-up
 
-Unit tests and compilation do not exercise the actual VS Code UI. Use the F5 checks above to verify integration and themes. Marketplace publication, publisher identity, license selection, VSIX distribution, automated Extension Host tests, and later product features are outside TASK-DP-003. This scaffold is private and unlicensed until distribution decisions are made.
+Unit tests and compilation do not exercise the actual VS Code UI. Use the F5 checks above to verify integration and themes. Marketplace publication, publisher identity, license selection, VSIX distribution, automated Extension Host tests, and later product features are outside TASK-DP-004. This scaffold is private and unlicensed until distribution decisions are made.
 
 
 ## Project initialization (TASK-DP-003)
 
-Use **DevPilot: Initialize Project** or its Control Center action. A workspace folder and a currently available, explicitly selected reasoning model are required. In a multi-root workspace, the **first folder** is the project root; the Project card and source-picker title identify it. The manifest name uses VS Code's workspace name, falling back to the folder name. Changing/removing the root while the source picker is open rejects initialization. No selection is stored for a separate project root in this task.
+Use **DevPilot: Initialize Project** or its Control Center action. A workspace folder and a currently available, explicitly selected reasoning model are required. In a multi-root workspace, DevPilot requires an **explicit project folder selection** before project operations. Use **Choose Project Folder** to change it; the Project card identifies the root. Selection is session-local and must be repeated after reloading a multi-root workspace. A single-root workspace uses its sole folder. The manifest name uses the workspace name for a single root and the selected folder name for multiple roots. Changing/removing the root while a picker is open rejects the pending operation. No machine-specific root URI is persisted.
 
 The source picker offers **Import PRD**, **Analyze Existing Code**, and **PRD + Existing Code** (recommended for an existing project with requirements). These choices only set the source field. Cancelling writes nothing. No document is requested, scanned, read, or analyzed, and no model request is sent by initialization.
 
@@ -112,7 +112,7 @@ Actual IDs are generated using `crypto.randomUUID()`, timestamps use UTC ISO for
 
 The validator checks every required field, UUID syntax, supported status/source values, nonempty strings, valid UTC timestamps and their order, and `relativeRoot: .`. Unsupported schema versions fail explicitly. V1 rejects unknown fields instead of silently preserving arbitrary data. Parsing is limited to one UTF-8 YAML document of at most 64 KiB; duplicate keys, custom-tag warnings, and aliases are rejected.
 
-Persistence uses `vscode.workspace.fs` with URI-aware paths. Serialization and validation happen before writes. The adapter writes to a unique temporary file in `.devpilot`, then renames to `project.yaml` with `overwrite: false`. Existing files, including corrupt manifests, are never replaced. Failed temporary writes are cleaned up where the filesystem allows it; cleanup failures are logged. A `.devpilot` directory alone does not imply initialization. Symbolic-link metadata paths reported by a provider are rejected. Rename and filesystem semantics depend on the remote/virtual provider; providers without writable/rename support fail gracefully.
+Persistence uses `vscode.workspace.fs` with URI-aware paths. Serialization and validation happen before writes. The adapter writes to a unique temporary file in `.devpilot`, then renames to `project.yaml` with `overwrite: false`. Initialization never replaces existing files, including corrupt manifests. Explicit PRD import separately updates a valid manifest using a checked temporary-file replacement, as described below. Failed temporary writes are cleaned up where the filesystem allows it; cleanup failures are logged. A `.devpilot` directory alone does not imply initialization. Symbolic-link metadata paths reported by a provider are rejected. Rename and filesystem semantics depend on the remote/virtual provider; providers without writable/rename support fail gracefully.
 
 Manifest changes, creation, deletion, workspace-folder changes, and model availability changes refresh the project view. Subscriptions and watchers belong to the extension lifecycle. **Output → DevPilot** shows operation/error codes without dumping manifest contents or secrets.
 
@@ -129,3 +129,61 @@ Manifest changes, creation, deletion, workspace-folder changes, and model availa
 9. **Malformed/future manifest:** In a disposable test folder, edit schemaVersion to 2 or introduce invalid YAML. The watcher should show a concise error and disable initialization; restoring valid YAML should restore the project card. No manifest should be overwritten automatically.
 
 Actual local/remote Extension Host behavior remains a manual integration check. Full project migrations, intelligence generation, synchronization, and transitions to READY belong to later tasks.
+
+
+## PRD discovery and import (TASK-DP-004)
+
+An `INITIALIZING` project with source `PRD` or `PRD_AND_CODEBASE` exposes **Select PRD**. Discovery shows a Quick Pick with relative paths and ranking reasons; it never imports a result automatically. **Browse for another document…** is always offered, including when no candidates exist. Cancelling either picker leaves metadata unchanged. `CODEBASE` projects do not expose PRD selection as a required step, and direct commands enforce the same source/lifecycle rules.
+
+Discovery uses bounded `workspace.findFiles` searches within the selected root, looking for likely filenames first. It considers at most 500 file results and displays at most 50 ranked candidates. The picker indicates when limits are reached; browse can select files beyond the search results. Required exclusions are `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`, `out`, `vendor`, and `.devpilot`. Enabled `files.exclude` and `search.exclude` patterns are included; conditional exclusion objects are treated conservatively as excluded. Discovery reads filenames only.
+
+Ranking is deterministic: exact PRD/product-requirements/requirements/spec filenames receive the strongest scores; meaningful filename terms, supported formats, and proximity to the root add explainable scores. Ties use relative-path ordering. README is a low-confidence fallback and is omitted when a stronger requirements candidate exists. No LLM ranks or chooses files. A bounded search cannot guarantee finding every document in a large workspace.
+
+### Reading and portable metadata
+
+Only `.md`, `.markdown`, and `.txt` are supported, case-insensitively. Files must be inside the selected root with the same URI scheme and authority. Paths are normalized workspace-relative values; absolute paths, traversal, empty segments, backslashes, percent escapes, and control characters are rejected. The reader uses `workspace.fs`, checks parent folders and file types, and rejects provider-reported symlinks. It checks size before and after reading, rejects empty/whitespace-only files, invalid UTF-8 and binary control characters, and never truncates content.
+
+The default limit is **1 MiB**, configurable with `devpilot.documents.maxBytes` (1 byte–16 MiB). SHA-256 is calculated over the original bytes, including any UTF-8 BOM. Text exists only transiently during reading; it is neither persisted in YAML nor sent to a model. No analysis, requirements extraction, repository analysis, or coding-agent execution occurs.
+
+Manifest schema remains **1**. Old manifests without inputs remain valid. A successful explicit import adds optional metadata:
+
+```yaml
+inputs:
+  prd:
+    relativePath: docs/PRD.md
+    format: markdown
+    sizeBytes: 18234
+    importedAt: 2026-09-21T11:00:00.000Z
+    contentHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+```
+
+The hash above illustrates the 64-character lowercase hexadecimal shape; actual values come from the document bytes. Runtime validation checks all five fields, matching extension/format, positive bounded size, timestamp, and SHA-256 structure. Import preserves identity, source, model snapshot, and `INITIALIZING` status, and updates `project.updatedAt`. It never transitions the project to `READY`.
+
+Updates recheck the manifest before writing a temporary file and again before replacing the destination. Stale picker snapshots and detected concurrent edits are rejected; failures clean up temporary files where possible. VS Code's filesystem API has no compare-and-swap transaction: a narrow race remains between the last check and rename, and atomicity depends on the provider. Avoid simultaneous external manifest edits during import. Provider-reported symlink checks cannot eliminate filesystem races; a file growing after stat may be allocated by `readFile` before the post-read limit rejects it.
+
+PRD state is separate from project lifecycle: **Not selected**, **Selected**, **Missing**, **Changed**, or **Unavailable** for validation/access errors. Reload and **Refresh Project** reevaluate the saved document and hash; no polling loop is used. **Re-import PRD** opens explicit selection again and updates metadata only after a successful import. Import is local and does not require sending a model request. Existing initialization still requires AI Ready.
+
+Commands added: `devpilot.selectPrd`, `devpilot.refreshProject`, and `devpilot.selectProjectWorkspace`. Command registrations follow extension disposal. The webview remains script-free, CSP-restricted, and limited to allowlisted static commands; document names and paths are escaped.
+
+Architecture additions:
+
+- `domain/document.ts`, `documentPath.ts`, `DocumentFailure.ts`: owned types, limits, portable-path rules, and safe failures.
+- `application/documents/`: discovery/reader ports, pure ranking, import orchestration, and PRD-state evaluation. No VS Code dependency or model calls.
+- `infrastructure/documents/`: VS Code search, URI boundary checks, UTF-8 reading, and built-in SHA-256.
+- Existing project storage owns manifest writes; command controllers own pickers; the Control Center renderer owns only display.
+
+### TASK-DP-004 manual acceptance
+
+Start with `npm install`, then press **F5 → Run DevPilot Extension**. In the Extension Development Host, open a disposable test folder, open **DevPilot: Open Control Center**, explicitly select a reasoning model, and initialize with **Import PRD**. Initialization itself does not open the PRD picker. Use separate test folders where a case requires a clean file set.
+
+1. **PRD vs README:** Put `PRD.md` and `README.md` in the folder, each with nonempty text. Click **Select PRD**. Expect `PRD.md` first; README is omitted because a stronger candidate exists. Cancel and confirm no input is saved.
+2. **Nested requirements:** Put nonempty text in `docs/product-requirements.md`. Click **Select PRD** and verify the candidate displays that relative path.
+3. **Browse fallback:** In a folder with no likely requirements documents, click **Select PRD → Browse for another document…** and select a supported nonempty workspace file. Browse must also appear when the candidate list is empty. Cancelling writes nothing.
+4. **Valid import:** Explicitly select a valid candidate. Inspect `.devpilot/project.yaml`: `inputs.prd` contains only relative path, format, byte size, UTC import time, and a 64-character SHA-256. Confirm no full document text or absolute path; the card shows **Selected**, and lifecycle stays **Initializing**.
+5. **Reload:** Run **Developer: Reload Window**, then open DevPilot. In multi-root workspaces first choose the same project folder. The saved document/path must reappear as **Selected** with the same metadata.
+6. **Changed:** Edit and save the imported document; click **Refresh Project**. Expect **Changed**. Click **Re-import PRD**, explicitly select it again, and expect **Selected** with an updated hash. No AI request should run.
+7. **Missing:** Delete or rename the configured document, then click **Refresh Project**. Expect **Missing**, with **Select PRD** available. The original metadata remains until a valid replacement is selected.
+8. **Outside workspace:** Choose **Select PRD → Browse…** and pick a supported file outside the selected root (including another root in a multi-root workspace). Expect a concise rejection and unchanged metadata.
+9. **Invalid input:** Try a zero-byte file, whitespace-only file, and a document exceeding 1 MiB with the default setting. Each must be rejected with a concise explanation and unchanged metadata. The native picker filters unsupported extensions; where the platform permits overriding filters, choose a `.pdf` and confirm rejection. Automated reader tests also exercise unsupported extensions directly.
+
+Additional regression checks: add a second workspace folder and verify DevPilot requires an explicit root choice before project operations; cancel the root picker and verify nothing is written. Confirm a CODEBASE project has no Select PRD action and a direct **DevPilot: Select PRD** invocation is rejected. Check a narrow sidebar, keyboard navigation, light/dark/high-contrast themes, and HTML-like filenames rendered literally. Live Extension Host and remote-provider behavior require these manual checks; unit tests mock the editor boundary.
