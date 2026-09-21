@@ -1,6 +1,8 @@
-export type ModelFailureCode = 'NO_MODEL' | 'SELECTION_REQUIRED' | 'NOT_FOUND' | 'ACCESS' | 'CANCELLED' | 'PROVIDER' | 'PERSISTENCE' | 'BUSY';
+export type ModelFailureCode = 'NO_MODEL' | 'SELECTION_REQUIRED' | 'NOT_FOUND' | 'ACCESS' | 'CANCELLED' | 'PROVIDER' | 'PERSISTENCE' | 'BUSY' | 'CONTEXT_LIMIT' | 'RESPONSE_LIMIT';
 
 const messages: Record<ModelFailureCode, string> = {
+  CONTEXT_LIMIT: 'The PRD analysis prompt cannot safely fit this model. Choose a model with a larger input limit; DevPilot will not truncate the PRD.',
+  RESPONSE_LIMIT: 'The analysis response exceeded the supported limit. No requirements were saved.',
   NO_MODEL: 'No reasoning model is available. Refresh Models after enabling a model provider in VS Code.',
   SELECTION_REQUIRED: 'Select a DevPilot reasoning model before continuing.',
   NOT_FOUND: 'The selected model is no longer available. Refresh Models and select a model.',

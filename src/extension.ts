@@ -1,3 +1,6 @@
+import { PrdAnalysisService } from './application/analysis/PrdAnalysisService';
+import { VscodeRequirementsStorage, REQUIREMENTS_PATH } from './infrastructure/requirements/VscodeRequirementsStorage';
+import { registerAnalysisCommands } from './presentation/commands/analysisCommands';
 import { PrdImportService } from './application/documents/PrdImportService';
 import { PrdStateService } from './application/documents/PrdStateService';
 import { VscodeDocumentDiscovery } from './infrastructure/documents/VscodeDocumentDiscovery';
@@ -27,7 +30,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const workspace = new VscodeProjectWorkspace();
   const storage = new VscodeProjectStorage(log);
   const reader = new VscodeDocumentReader();
-  const projects = new ProjectService(workspace, models, storage, randomUUID, () => new Date(), new PrdStateService(reader));
+  const analysis = new PrdAnalysisService(workspace, storage, reader, models, gateway, new VscodeRequirementsStorage(log), () => new Date());
+  const projects = new ProjectService(workspace, models, storage, randomUUID, () => new Date(), new PrdStateService(reader), analysis);
   const prds = new PrdImportService(workspace, storage, new VscodeDocumentDiscovery(), reader, () => new Date());
   const chooseWorkspace = async (force = false): Promise<boolean> => {
     const previous = workspace.current()?.key;
@@ -47,7 +51,10 @@ export function activate(context: vscode.ExtensionContext): void {
   const refreshModels = (): void => { void models.refresh().catch(() => undefined); };
   let observedModelState = models.state;
   const watcher = vscode.workspace.createFileSystemWatcher(`**/${PROJECT_MANIFEST_PATH}`);
+  const requirementsWatcher = vscode.workspace.createFileSystemWatcher(`**/${REQUIREMENTS_PATH}`);
   context.subscriptions.push(
+    analysis, requirementsWatcher, analysis.onDidChange(refreshProjects),
+    requirementsWatcher.onDidCreate(refreshProjects), requirementsWatcher.onDidChange(refreshProjects), requirementsWatcher.onDidDelete(refreshProjects),
     output, provider, gateway, projects, watcher,
     projects.onDidChange(() => provider.refresh()),
     models.onDidChange(() => {
@@ -64,6 +71,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerWebviewViewProvider(ControlCenterViewProvider.viewType, provider),
     ...registerModelCommands(models), registerProjectCommands(projects, log, chooseWorkspace),
     ...registerPrdCommands(prds, projects, chooseWorkspace, log),
+    ...registerAnalysisCommands(analysis, projects, chooseWorkspace, log),
   );
   refreshProjects();
   refreshModels();

@@ -46,7 +46,7 @@ export function registerPrdCommands(
       } else relativePath = selection.relativePath;
       await prds.import(result.workspace, result.manifest, relativePath);
       await projects.refresh();
-      await vscode.window.showInformationMessage('PRD imported. The project remains Initializing; no AI analysis has run.');
+      await vscode.window.showInformationMessage('PRD imported. The project remains Initializing; no AI analysis was triggered by this import.');
     })),
     vscode.commands.registerCommand('devpilot.refreshProject', () => run(async () => {
       if (await chooseWorkspace()) await projects.refresh();

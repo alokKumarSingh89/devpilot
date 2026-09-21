@@ -1,3 +1,4 @@
+import { renderAnalysis } from './renderAnalysis';
 import type { PrdState } from '../../domain/document';
 import type { ProjectSource, ProjectState } from '../../domain/project';
 import { action } from './renderModels';
@@ -6,7 +7,7 @@ import { tile } from './icons';
 
 const sourceLabels: Record<ProjectSource, string> = { PRD: 'PRD', CODEBASE: 'Existing Code', PRD_AND_CODEBASE: 'PRD + Existing Code' };
 
-export function renderProject(state: ProjectState, folderName?: string): string {
+export function renderProject(state: ProjectState, folderName?: string, modelReady = false): string {
   let title: string;
   let description: string;
   let details = '';
@@ -20,13 +21,19 @@ export function renderProject(state: ProjectState, folderName?: string): string 
     case 'INITIALIZING':
     case 'READY': {
       title = state.manifest.project.name;
-      description = state.status === 'INITIALIZING'
-        ? 'Project initialized. Project intelligence has not yet been generated. No analysis has run.'
-        : 'Project is ready.';
+      description = state.status === 'READY' ? 'Project is ready.' : 'Project initialized. Project intelligence has not yet been generated. No analysis has run.';
+      if (state.status === 'INITIALIZING' && state.analysis) {
+        description = state.analysis.status === 'ANALYZING'
+          ? 'PRD analysis is running. Project initialization is not complete.'
+          : 'artifact' in state.analysis && state.analysis.artifact
+            ? 'Requirements intelligence is available for review. Project initialization is not complete.'
+            : 'No validated requirements artifact is available yet. The project remains Initializing.';
+      }
       details = `<dl class="project-details"><dt>Status</dt><dd>${state.status === 'INITIALIZING' ? 'Initializing' : 'Ready'}</dd><dt>Source</dt><dd>${sourceLabels[state.manifest.project.source]}</dd></dl>`;
       if (state.manifest.project.source !== 'CODEBASE' || state.manifest.inputs?.prd) {
         const prd = state.prd ?? { status: 'NOT_SELECTED' };
         details += renderPrd(prd, state.status === 'INITIALIZING' && state.manifest.project.source !== 'CODEBASE');
+        if (state.analysis) details += renderAnalysis(state.analysis, modelReady && prd.status === 'SELECTED' && state.status === 'INITIALIZING' && state.manifest.project.source !== 'CODEBASE');
       }
       break;
     }

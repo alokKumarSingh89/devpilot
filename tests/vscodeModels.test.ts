@@ -12,9 +12,10 @@ vi.mock('vscode', () => ({
   LanguageModelError: class extends Error { constructor(readonly code: string) { super('private detail'); } },
   LanguageModelChatMessage: { User: (content: string) => ({ role: 'user', content }) },
   CancellationTokenSource: class {
-    token = { isCancellationRequested: false };
+    private readonly listeners = new Set<() => void>();
+    token = { isCancellationRequested: false, onCancellationRequested: (listener: () => void) => { this.listeners.add(listener); return { dispose: () => { this.listeners.delete(listener); } }; } };
     dispose = vi.fn();
-    cancel = () => { this.token.isCancellationRequested = true; };
+    cancel = () => { this.token.isCancellationRequested = true; this.listeners.forEach((listener) => listener()); };
     constructor() { host.sources.push(this); }
   },
 }));
@@ -34,6 +35,7 @@ function cancellation() {
 function model() {
   return {
     id: 'chosen', name: 'Chosen', vendor: 'provider', family: 'reasoning', maxInputTokens: 2048,
+    countTokens: vi.fn(async () => 100),
     sendRequest: vi.fn(async (): Promise<{ text: AsyncIterable<string> }> => ({ text: (async function* () { yield 'DEV PILOT '; yield 'AI READY'; })() })),
   };
 }
@@ -157,4 +159,63 @@ it('clear removes only DevPilot workspace-state selection', async () => {
   expect(store.read()).toBeUndefined();
   expect([...values]).toEqual([['unrelated.preference', 'keep']]);
   expect(host.select).not.toHaveBeenCalled();
+});
+
+const analysisOptions = { purpose: 'prdAnalysis' as const, expectedModel: { vendor: 'provider', family: 'reasoning' }, maxResponseCharacters: 262144, outputHeadroomTokens: 4096 };
+describe('analysis transport limits and cancellation', () => {
+  it('counts the actual message on the freshly resolved model and permits bounded analysis output beyond Test Model limits', async () => {
+    const available = { ...model(), maxInputTokens: 32000 };
+    available.sendRequest.mockResolvedValue({ text: (async function* () { yield 'x'.repeat(9000); })() });
+    host.select.mockResolvedValue([available]);
+    const result = await new VscodeLanguageModelGateway().sendRequest('chosen', 'PRD prompt', cancellation(), analysisOptions);
+    expect(result).toHaveLength(9000);
+    expect(available.countTokens).toHaveBeenCalledWith({ role: 'user', content: 'PRD prompt' }, host.sources[0]?.token);
+    expect(available.sendRequest).toHaveBeenCalledWith([{ role: 'user', content: 'PRD prompt' }], { justification: expect.any(String) }, host.sources[0]?.token);
+    expect(host.sources[0]?.dispose).toHaveBeenCalledOnce();
+  });
+  it.each([0, Number.NaN, 4096, 10000])('rejects unsafe input capacity %s before sending', async (capacity) => {
+    const available = { ...model(), maxInputTokens: capacity };
+    available.countTokens.mockResolvedValue(8000);
+    host.select.mockResolvedValue([available]);
+    await expect(new VscodeLanguageModelGateway().sendRequest('chosen', 'prompt', cancellation(), analysisOptions)).rejects.toMatchObject({ code: 'CONTEXT_LIMIT' });
+    expect(available.sendRequest).not.toHaveBeenCalled();
+    expect(host.sources[0]?.dispose).toHaveBeenCalledOnce();
+  });
+  it('rejects unknown token counts and changed generating metadata', async () => {
+    const available = { ...model(), maxInputTokens: 32000 };
+    available.countTokens.mockResolvedValue(Number.NaN); host.select.mockResolvedValue([available]);
+    await expect(new VscodeLanguageModelGateway().sendRequest('chosen', 'prompt', cancellation(), analysisOptions)).rejects.toMatchObject({ code: 'CONTEXT_LIMIT' });
+    host.select.mockResolvedValue([{ ...available, family: 'different' }]);
+    await expect(new VscodeLanguageModelGateway().sendRequest('chosen', 'prompt', cancellation(), analysisOptions)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(available.sendRequest).not.toHaveBeenCalled();
+  });
+  it('rejects oversized analysis output and cancels the provider without returning a partial response', async () => {
+    const available = { ...model(), maxInputTokens: 32000 };
+    available.sendRequest.mockResolvedValue({ text: (async function* () { yield 'x'.repeat(262145); })() });
+    host.select.mockResolvedValue([available]);
+    await expect(new VscodeLanguageModelGateway().sendRequest('chosen', 'prompt', cancellation(), analysisOptions)).rejects.toMatchObject({ code: 'RESPONSE_LIMIT' });
+    expect(host.sources[0]?.token.isCancellationRequested).toBe(true);
+  });
+  it('cancels immediately during token counting even if the provider does not settle', async () => {
+    const available = { ...model(), maxInputTokens: 32000 };
+    available.countTokens.mockImplementation(() => new Promise<number>(() => undefined));
+    host.select.mockResolvedValue([available]);
+    const token = cancellation(); const gateway = new VscodeLanguageModelGateway();
+    const running = gateway.sendRequest('chosen', 'prompt', token, analysisOptions);
+    const rejection = expect(running).rejects.toMatchObject({ code: 'CANCELLED' });
+    await vi.waitFor(() => expect(available.countTokens).toHaveBeenCalledOnce()); token.cancel(); await rejection;
+    expect(available.sendRequest).not.toHaveBeenCalled(); expect(token.listeners.size).toBe(0);
+    expect(host.sources[0]?.dispose).toHaveBeenCalledOnce();
+  });
+  it('stops waiting on a stalled stream and closes its iterator on cancellation', async () => {
+    const close = vi.fn(async () => ({ done: true as const, value: undefined }));
+    const next = vi.fn(() => new Promise<IteratorResult<string>>(() => undefined));
+    const available = { ...model(), maxInputTokens: 32000 };
+    available.sendRequest.mockResolvedValue({ text: { [Symbol.asyncIterator]: () => ({ next, return: close }) } });
+    host.select.mockResolvedValue([available]);
+    const token = cancellation(); const running = new VscodeLanguageModelGateway().sendRequest('chosen', 'prompt', token, analysisOptions);
+    const rejection = expect(running).rejects.toMatchObject({ code: 'CANCELLED' });
+    await vi.waitFor(() => expect(next).toHaveBeenCalledOnce()); token.cancel(); await rejection;
+    expect(next).toHaveBeenCalledOnce(); expect(close).toHaveBeenCalledOnce(); expect(host.sources[0]?.dispose).toHaveBeenCalledOnce();
+  });
 });

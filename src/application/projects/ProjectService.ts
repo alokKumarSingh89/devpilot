@@ -1,3 +1,4 @@
+import type { PrdAnalysisService } from '../analysis/PrdAnalysisService';
 import type { PrdStateService } from '../documents/PrdStateService';
 import type { ReasoningModel } from '../../domain/reasoningModel';
 import { ProjectFailure } from '../../domain/ProjectFailure';
@@ -20,6 +21,7 @@ export class ProjectService {
     private readonly createId: () => string,
     private readonly now: () => Date,
     private readonly prdState?: PrdStateService,
+    private readonly analysis?: Pick<PrdAnalysisService, 'evaluate'>,
   ) {}
 
   onDidChange(listener: () => void): { dispose(): void } {
@@ -39,8 +41,11 @@ export class ProjectService {
     let state: ProjectState;
     try {
       const manifest = await this.storage.read(workspace);
-      state = manifest ? { status: manifest.project.status, manifest, ...(this.prdState ? { prd: await this.prdState.evaluate(workspace, manifest.inputs?.prd) } : {}) }
-        : { status: this.models.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' };
+      state = manifest ? {
+        status: manifest.project.status, manifest,
+        ...(this.prdState ? { prd: await this.prdState.evaluate(workspace, manifest.inputs?.prd) } : {}),
+        ...(this.analysis && manifest.project.source !== 'CODEBASE' ? { analysis: await this.analysis.evaluate(workspace, manifest) } : {}),
+      } : { status: this.models.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' };
     } catch (error) {
       state = { status: 'ERROR', message: error instanceof ProjectFailure ? error.message : new ProjectFailure('READ_FAILED').message };
     }
