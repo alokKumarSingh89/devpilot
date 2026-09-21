@@ -1,3 +1,4 @@
+import type { ProjectState } from '../domain/project';
 import type { ModelState } from '../domain/reasoningModel';
 import type { ModelTestResult } from './models/ReasoningModelService';
 
@@ -10,16 +11,17 @@ export interface ControlCenterState {
     readonly testResult: ModelTestResult | undefined;
     readonly testing: boolean;
   };
-  readonly projectStatus: 'No project initialized';
+  readonly project: ProjectState;
+  readonly projectFolderName?: string | undefined;
 }
 
-/** TASK-DP-001 has no project persistence or initialization workflow. */
+/** Initial view state until the project storage service resolves the manifest. */
 export function getControlCenterState(
   workspaceFolders: readonly { readonly name: string; readonly path?: string | undefined }[] | undefined,
 ): ControlCenterState {
   return {
     workspacePaths: workspaceFolders?.flatMap((folder) => folder.path ? [folder.path] : []) ?? [],
     workspaceFolderNames: workspaceFolders?.map((folder) => folder.name) ?? [],
-    projectStatus: 'No project initialized',
+    project: { status: workspaceFolders?.length ? 'LOADING' : 'NO_WORKSPACE' },
   };
 }
