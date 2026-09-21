@@ -21,6 +21,7 @@ const host = vi.hoisted(() => {
 
 vi.mock('vscode', () => ({
   workspace: host.workspace,
+  lm: { selectChatModels: async () => [], onDidChangeChatModels: () => ({ dispose() {} }) },
   window: { registerWebviewViewProvider: host.registerView },
   commands: { registerCommand: () => ({ dispose: vi.fn() }) },
   Uri: { joinPath: (_base: vscode.Uri, ...segments: string[]) => ({ toString: () => segments.join('/') }) },
@@ -54,7 +55,7 @@ describe('workspace refresh through extension activation', () => {
     host.folderListeners.clear();
     host.registerView.mockClear();
     subscriptions = [];
-    activate({ extensionUri: {}, subscriptions } as unknown as vscode.ExtensionContext);
+    activate({ extensionUri: {}, subscriptions, workspaceState: { get: () => undefined }, languageModelAccessInformation: { onDidChange: () => ({ dispose() {} }), canSendRequest: () => true } } as unknown as vscode.ExtensionContext);
     const registration = host.registerView.mock.calls[0];
     if (!registration) {
       throw new Error('Control Center provider was not registered');
@@ -76,6 +77,7 @@ describe('workspace refresh through extension activation', () => {
     provider.resolveWebviewView(view);
     expect(webview.html).toContain('<li>actual-folder</li>');
     expect(webview.options.enableScripts).toBe(false);
+    expect(webview.options.enableCommandUris).toEqual(['devpilot.openFolder', 'devpilot.refreshModels', 'devpilot.selectModel', 'devpilot.clearModel', 'devpilot.testModel', 'devpilot.initializeProject']);
     expect(webview.html).toContain('Content-Security-Policy');
   });
 

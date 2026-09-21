@@ -21,6 +21,36 @@
         "command": "devpilot.openControlCenter",
         "title": "Open Control Center",
         "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.refreshModels",
+        "title": "Refresh Models",
+        "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.selectModel",
+        "title": "Select Reasoning Model",
+        "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.testModel",
+        "title": "Test Model",
+        "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.clearModel",
+        "title": "Clear Reasoning Model",
+        "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.initializeProject",
+        "title": "Initialize Project",
+        "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.openFolder",
+        "title": "Open Folder",
+        "category": "DevPilot"
       }
     ],
     "viewsContainers": {

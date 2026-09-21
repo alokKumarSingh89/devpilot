@@ -1,17 +1,12 @@
+import { escapeHtml } from './escapeHtml';
+export { escapeHtml } from './escapeHtml';
+import { renderModels, renderProject, renderCodingAgent, action } from './renderModels';
+import { tile } from './icons';
 import type { ControlCenterState } from '../../application/controlCenterState';
 
 interface ControlCenterResources {
   readonly stylesheetUri: string;
   readonly cspSource: string;
-}
-
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 export function renderControlCenter(
@@ -35,13 +30,15 @@ export function renderControlCenter(
 </head>
 <body>
   <main>
-    <h1>DevPilot</h1>
-    <p class="subtitle">AI Engineering Control Plane</p>
-    <section class="workspace" aria-labelledby="workspace-heading">
-      <h2 id="workspace-heading">Workspace</h2>
-      ${workspace}
+    <header><h1>DevPilot</h1><p class="subtitle">AI Engineering Control Plane</p></header>
+    <section class="card workspace" aria-labelledby="workspace-heading">
+      <div class="card-heading">${tile('folder')}<div class="heading-copy"><h2 id="workspace-heading">Workspace</h2>${workspace}
+      ${state.workspacePaths.map((path) => `<p class="workspace-path muted">${escapeHtml(path)}</p>`).join('')}</div>${action('openFolder', 'Open Folder', true)}</div>
     </section>
-    <p class="status">${escapeHtml(state.projectStatus)}</p>
+    ${state.reasoning ? renderModels(state.reasoning) : ''}
+    ${renderCodingAgent()}
+    ${renderProject(state.projectStatus, state.reasoning?.state)}
+    <footer><span>Build better software with AI</span></footer>
   </main>
 </body>
 </html>`;
