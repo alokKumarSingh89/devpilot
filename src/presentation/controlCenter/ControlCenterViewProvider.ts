@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { ControlCenterState } from '../../application/controlCenterState';
+import { controlCenterActions } from './actions';
 import { renderControlCenter } from './renderControlCenter';
 
 export class ControlCenterViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
@@ -18,6 +19,7 @@ export class ControlCenterViewProvider implements vscode.WebviewViewProvider, vs
     const mediaRoot = vscode.Uri.joinPath(this.extensionUri, 'media');
     view.webview.options = {
       enableScripts: false,
+      enableCommandUris: Object.values(controlCenterActions),
       localResourceRoots: [mediaRoot],
     };
     this.viewDisposalSubscription = view.onDidDispose(() => this.dispose());

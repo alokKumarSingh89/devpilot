@@ -78,3 +78,14 @@ describe('workspace folder state', () => {
     expect(html).not.toContain('No workspace open');
   });
 });
+
+
+it('escapes workspace paths and keeps coding-agent configuration unavailable', () => {
+  const state = getControlCenterState([{ name: 'workspace', path: '/projects/<untrusted>&team' }]);
+  const html = renderControlCenter(state, resources);
+  expect(html).toContain('/projects/&lt;untrusted&gt;&amp;team');
+  expect(html).toContain('command:devpilot.openFolder');
+  expect(html).toContain('Coding Agent');
+  expect(html).toContain('<button class="action secondary" disabled>');
+  expect(html).not.toContain('command:devpilot.configureAgent');
+});
