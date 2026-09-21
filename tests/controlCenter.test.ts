@@ -12,7 +12,7 @@ describe('Control Center rendering', () => {
     const html = renderControlCenter(getControlCenterState(undefined), resources);
     expect(html).toContain('<h1>DevPilot</h1>');
     expect(html).toContain('AI Engineering Control Plane');
-    expect(html).toContain('No project initialized');
+    expect(html).not.toContain('command:devpilot.initializeProject');
     expect(html).toContain('<h2 id="workspace-heading">Workspace</h2>');
     expect(html).toContain('No workspace open');
     expect(html).not.toContain('undefined');
@@ -21,7 +21,7 @@ describe('Control Center rendering', () => {
   it('shows the supplied workspace name without implying project initialization', () => {
     const html = renderControlCenter(getControlCenterState([{ name: 'Engineering' }]), resources);
     expect(html).toContain('<li>Engineering</li>');
-    expect(html).toContain('No project initialized');
+    expect(html).not.toContain('command:devpilot.initializeProject');
   });
 
   it('renders malicious workspace names as text', () => {

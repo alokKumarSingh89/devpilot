@@ -1,6 +1,7 @@
 import { escapeHtml } from './escapeHtml';
 export { escapeHtml } from './escapeHtml';
-import { renderModels, renderProject, renderCodingAgent, action } from './renderModels';
+import { renderModels, renderCodingAgent, action } from './renderModels';
+import { renderProject } from './renderProject';
 import { tile } from './icons';
 import type { ControlCenterState } from '../../application/controlCenterState';
 
@@ -37,7 +38,7 @@ export function renderControlCenter(
     </section>
     ${state.reasoning ? renderModels(state.reasoning) : ''}
     ${renderCodingAgent()}
-    ${renderProject(state.projectStatus, state.reasoning?.state)}
+    ${renderProject(state.project, state.projectFolderName)}
     <footer><span>Build better software with AI</span></footer>
   </main>
 </body>

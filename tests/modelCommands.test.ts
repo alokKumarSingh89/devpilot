@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { activate } from '../src/extension';
+vi.mock('../src/infrastructure/projects/VscodeProjectStorage', () => ({
+  PROJECT_MANIFEST_PATH: '.devpilot/project.yaml',
+  VscodeProjectStorage: class {
+    async exists() { return false; }
+    async read() { return undefined; }
+    async write() { /* Model/workspace regression tests isolate project storage. */ }
+  },
+}));
+function watcher() { return { dispose() {}, onDidCreate: () => ({ dispose() {} }), onDidChange: () => ({ dispose() {} }), onDidDelete: () => ({ dispose() {} }) }; }
+
 
 const host = vi.hoisted(() => ({
   openDialog: vi.fn<() => Promise<vscode.Uri[] | undefined>>(),
@@ -13,12 +23,13 @@ const host = vi.hoisted(() => ({
 }));
 vi.mock('vscode', () => ({
   lm: { selectChatModels: host.discover, onDidChangeChatModels: () => ({ dispose() {} }) },
-  workspace: { workspaceFolders: [], onDidChangeWorkspaceFolders: () => ({ dispose() {} }) },
+  workspace: { isTrusted: true, createFileSystemWatcher: watcher, workspaceFolders: [{ name: 'test', uri: { toString: () => 'file:///test' } }], onDidChangeWorkspaceFolders: () => ({ dispose() {} }) },
   commands: { executeCommand: host.execute, registerCommand: (id: string, callback: () => Promise<void>) => {
     host.commands.set(id, callback);
     return { dispose: () => { host.commands.delete(id); } };
   } },
   window: {
+    createOutputChannel: () => ({ appendLine() {}, dispose() {} }),
     registerWebviewViewProvider: () => ({ dispose() {} }),
     showWarningMessage: host.warning,
     showInformationMessage: host.information,
@@ -83,9 +94,10 @@ describe('Clear Reasoning Model command confirmation', () => {
 });
 
 describe('project command gate and selection picker', () => {
-  it('only shows the not-implemented notice when READY and performs no initialization', async () => {
+  it('shows the source picker when READY and cancels without initializing', async () => {
     await invoke('devpilot.initializeProject');
-    expect(host.information).toHaveBeenCalledWith('AI configuration is ready. Project initialization is not implemented in this version.');
+    expect(host.picker).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ source: 'PRD' }), expect.objectContaining({ source: 'CODEBASE' }), expect.objectContaining({ source: 'PRD_AND_CODEBASE' })]), expect.anything());
+    expect(host.information).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
 

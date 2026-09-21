@@ -1,0 +1,18 @@
+import type { ProjectManifest } from '../../domain/project';
+
+/** Runtime-only opaque location; never serialized into a project manifest. */
+export interface ProjectWorkspace {
+  readonly key: string;
+  readonly name: string;
+  readonly folderName: string;
+}
+export interface ProjectWorkspaceContext {
+  current(): ProjectWorkspace | undefined;
+  isTrusted(): boolean;
+}
+export interface ProjectStorage {
+  exists(workspace: ProjectWorkspace): Promise<boolean>;
+  read(workspace: ProjectWorkspace): Promise<ProjectManifest | undefined>;
+  /** Create-only: must not overwrite an existing manifest, even if it is invalid. */
+  write(workspace: ProjectWorkspace, project: ProjectManifest): Promise<void>;
+}

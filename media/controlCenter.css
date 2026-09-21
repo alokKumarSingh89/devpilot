@@ -96,3 +96,7 @@ footer::before, footer::after { content: ''; width: 50px; height: 1px; backgroun
   .selected-model { padding: 10px; gap: 8px; }
   .selected-model .icon-tile { display: none; }
 }
+
+.project-details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 12px 0; }
+.project-details dt { color: var(--muted); }
+.project-details dd { margin: 0; }

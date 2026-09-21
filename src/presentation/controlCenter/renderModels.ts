@@ -1,5 +1,5 @@
 import type { ReasoningModelService } from '../../application/models/ReasoningModelService';
-import type { ModelState, ReasoningModel } from '../../domain/reasoningModel';
+import type { ReasoningModel } from '../../domain/reasoningModel';
 import { controlCenterActions, type ControlCenterAction } from './actions';
 import { icon, tile, type IconName } from './icons';
 import { escapeHtml } from './escapeHtml';
@@ -49,14 +49,6 @@ export function renderModels(model: ModelPresentation): string {
     ${model.notice ? `<p role="status">${escapeHtml(model.notice)}</p>` : ''}
     ${model.testResult ? `<h3>Actual response — ${escapeHtml(model.testResult.modelName)}</h3><pre>${escapeHtml(model.testResult.response || '(Empty response)')}</pre>` : ''}
   </section>`;
-}
-
-export function renderProject(status: string, state: ModelState | undefined): string {
-  const ready = state?.status === 'READY';
-  const availability = ready
-    ? 'AI configuration is ready. Project initialization is not implemented in this version.'
-    : `Project initialization unavailable until ${state?.status === 'SELECTION_REQUIRED' ? 'a reasoning model is selected' : 'an AI model is configured'}.`;
-  return `<section class="card project" aria-labelledby="project-heading"><div class="card-heading">${tile('layers')}<div class="heading-copy"><h2 id="project-heading">Project</h2><h3>${escapeHtml(status)}</h3></div>${ready ? action('initialize', 'Initialize Project') : ''}</div><p class="muted card-description">${availability}</p></section>`;
 }
 
 export function renderCodingAgent(): string {

@@ -1,6 +1,7 @@
+import { renderProject } from '../src/presentation/controlCenter/renderProject';
 import { describe, expect, it } from 'vitest';
 import { resolveModelState } from '../src/domain/reasoningModel';
-import { renderModels, renderProject } from '../src/presentation/controlCenter/renderModels';
+import { renderModels } from '../src/presentation/controlCenter/renderModels';
 
 const model = { id: 'chosen', name: 'GPT-5 mini', vendor: 'copilot', family: 'gpt-5-mini' };
 const view = (models = [model], selected?: string) => ({
@@ -17,8 +18,8 @@ describe('AI configuration hierarchy', () => {
     expect(html).not.toContain('command:devpilot.selectModel');
     expect(html).not.toContain('command:devpilot.clearModel');
     expect(html).not.toContain('NO_MODEL');
-    expect(renderProject('No project initialized', state.state)).toContain('until an AI model is configured');
-    expect(renderProject('No project initialized', state.state)).not.toContain('command:');
+    expect(renderProject({ status: state.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' })).toContain('until a reasoning model is selected');
+    expect(renderProject({ status: state.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' })).not.toContain('command:');
   });
 
   it('shows setup guidance and a count instead of a dense catalog', () => {
@@ -30,7 +31,7 @@ describe('AI configuration hierarchy', () => {
     expect(html).toContain('architecture reasoning');
     expect(html).not.toContain('GPT-5 mini');
     expect(html).not.toContain('SELECTION_REQUIRED');
-    expect(renderProject('No project initialized', state.state)).toContain('until a reasoning model is selected');
+    expect(renderProject({ status: state.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' })).toContain('until a reasoning model is selected');
   });
 
   it('identifies the selected model and exposes change, clear, test, and the gated project entry', () => {
@@ -43,7 +44,7 @@ describe('AI configuration hierarchy', () => {
     for (const command of ['testModel', 'selectModel', 'clearModel', 'refreshModels']) {
       expect(html).toContain(`command:devpilot.${command}`);
     }
-    expect(renderProject('No project initialized', state.state)).toContain('command:devpilot.initializeProject');
-    expect(renderProject('No project initialized', state.state)).toContain('not implemented in this version');
+    expect(renderProject({ status: state.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' })).toContain('command:devpilot.initializeProject');
+    expect(renderProject({ status: 'NO_WORKSPACE' })).not.toContain('command:devpilot.initializeProject');
   });
 });

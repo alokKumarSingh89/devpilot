@@ -2,14 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import type { ControlCenterViewProvider } from '../src/presentation/controlCenter/ControlCenterViewProvider';
 import { activate } from '../src/extension';
+vi.mock('../src/infrastructure/projects/VscodeProjectStorage', () => ({
+  PROJECT_MANIFEST_PATH: '.devpilot/project.yaml',
+  VscodeProjectStorage: class {
+    async exists() { return false; }
+    async read() { return undefined; }
+    async write() { /* Model/workspace regression tests isolate project storage. */ }
+  },
+}));
+
+
 
 const host = vi.hoisted(() => {
   const folderListeners = new Set<() => void>();
   return {
     folderListeners,
     workspace: {
+      isTrusted: true, createFileSystemWatcher: () => ({ dispose() {}, onDidCreate: () => ({ dispose() {} }), onDidChange: () => ({ dispose() {} }), onDidDelete: () => ({ dispose() {} }) }),
       name: undefined,
-      workspaceFolders: undefined as { name: string }[] | undefined,
+      workspaceFolders: undefined as { name: string; uri: { scheme: string; toString(): string } }[] | undefined,
       onDidChangeWorkspaceFolders: (listener: () => void) => {
         folderListeners.add(listener);
         return { dispose: () => { folderListeners.delete(listener); } };
@@ -22,7 +33,8 @@ const host = vi.hoisted(() => {
 vi.mock('vscode', () => ({
   workspace: host.workspace,
   lm: { selectChatModels: async () => [], onDidChangeChatModels: () => ({ dispose() {} }) },
-  window: { registerWebviewViewProvider: host.registerView },
+  window: {
+    createOutputChannel: () => ({ appendLine() {}, dispose() {} }), registerWebviewViewProvider: host.registerView },
   commands: { registerCommand: () => ({ dispose: vi.fn() }) },
   Uri: { joinPath: (_base: vscode.Uri, ...segments: string[]) => ({ toString: () => segments.join('/') }) },
 }));
@@ -72,7 +84,7 @@ describe('workspace refresh through extension activation', () => {
   };
 
   it('renders folder names even when the workspace-level name is undefined', () => {
-    host.workspace.workspaceFolders = [{ name: 'actual-folder' }];
+    host.workspace.workspaceFolders = [{ name: 'actual-folder', uri: { scheme: 'file', toString: () => 'file:///actual-folder' } }];
     const { view, webview } = createView();
     provider.resolveWebviewView(view);
     expect(webview.html).toContain('<li>actual-folder</li>');
@@ -85,21 +97,21 @@ describe('workspace refresh through extension activation', () => {
     const { view, webview } = createView();
     provider.resolveWebviewView(view);
     expect(webview.html).toContain('No workspace open');
-    host.workspace.workspaceFolders = [{ name: 'api' }, { name: 'web' }];
+    host.workspace.workspaceFolders = [{ name: 'api', uri: { scheme: 'file', toString: () => 'file:///api' } }, { name: 'web', uri: { scheme: 'file', toString: () => 'file:///web' } }];
     fireFolderChange();
     expect(webview.html).toContain('<li>api</li><li>web</li>');
-    host.workspace.workspaceFolders = [{ name: 'renamed' }];
+    host.workspace.workspaceFolders = [{ name: 'renamed', uri: { scheme: 'file', toString: () => 'file:///renamed' } }];
     fireFolderChange();
     expect(webview.html).toContain('<li>renamed</li>');
     expect(webview.html).not.toContain('<li>web</li>');
     host.workspace.workspaceFolders = [];
     fireFolderChange();
     expect(webview.html).toContain('No workspace open');
-    expect(webview.html).toContain('No project initialized');
+    expect(webview.html).toContain('Open a folder to start using DevPilot.');
   });
 
   it('reads fresh state when resolving a view after changes or disposal', () => {
-    host.workspace.workspaceFolders = [{ name: 'before-resolve' }];
+    host.workspace.workspaceFolders = [{ name: 'before-resolve', uri: { scheme: 'file', toString: () => 'file:///before-resolve' } }];
     fireFolderChange();
     const first = createView();
     provider.resolveWebviewView(first.view);
@@ -107,7 +119,7 @@ describe('workspace refresh through extension activation', () => {
     first.disposeListeners.forEach((listener) => listener());
     expect(first.disposeListeners.size).toBe(0);
     const oldHtml = first.webview.html;
-    host.workspace.workspaceFolders = [{ name: 'after-dispose' }];
+    host.workspace.workspaceFolders = [{ name: 'after-dispose', uri: { scheme: 'file', toString: () => 'file:///after-dispose' } }];
     fireFolderChange();
     expect(first.webview.html).toBe(oldHtml);
     const second = createView();
@@ -123,7 +135,7 @@ describe('workspace refresh through extension activation', () => {
     expect(host.folderListeners.size).toBe(0);
     expect(disposeListeners.size).toBe(0);
     const oldHtml = webview.html;
-    host.workspace.workspaceFolders = [{ name: 'after-shutdown' }];
+    host.workspace.workspaceFolders = [{ name: 'after-shutdown', uri: { scheme: 'file', toString: () => 'file:///after-shutdown' } }];
     fireFolderChange();
     provider.refresh();
     expect(webview.html).toBe(oldHtml);
