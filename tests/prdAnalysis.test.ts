@@ -225,7 +225,7 @@ it.each([false, true])('reports the actual artifact outcome and precise safe dia
   await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ message: expect.stringContaining(existing ? 'The previous requirements artifact was preserved.' : 'No requirements artifact was created.') });
   expect(ctx.storage.write).not.toHaveBeenCalled();
   const logs = ctx.log.mock.calls.flat().join('\n');
-  for (const expected of ['started', 'modelId', 'prdBytes', 'promptCharacters', 'responseCharacters', 'raw validation', 'functionalRequirements[0].priority', 'MUST | SHOULD | COULD', 'HIGH']) expect(logs).toContain(expected);
+  for (const expected of ['started', 'modelId', 'prdBytes', 'promptCharacters', 'responseCharacters', 'RAW_SHAPE_VALIDATION', 'functionalRequirements[0].priority', 'MUST | SHOULD | COULD', 'HIGH']) expect(logs).toContain(expected);
   expect(logs).not.toContain(prdText); expect(logs).not.toContain('Users must be able to create an account');
   expect(await ctx.service.evaluate(ctx.workspace, ctx.manifest)).toMatchObject({ status: 'FAILED', message: expect.stringContaining(existing ? 'preserved' : 'No requirements artifact was created') });
 });
@@ -244,8 +244,29 @@ it('logs a distinct source-verification failure and preserves the previous artif
   ctx.gateway.sendRequest.mockResolvedValue(JSON.stringify({ ...raw, functionalRequirements: raw.functionalRequirements.map((item, index) => index === 1 ? { ...item, sourceReferences: [valid, valid, { section: 'Tasks', quote: 'Unsupported private paraphrase.' }] } : item) }));
   await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ code: 'INVALID_OUTPUT' });
   const logs = ctx.log.mock.calls.flat().join('\n');
-  for (const expected of ['source quote verification', 'functionalRequirements[1].sourceReferences[2].quote', 'quoteLength', 'normalizedQuoteLength', 'NOT_FOUND']) expect(logs).toContain(expected);
+  for (const expected of ['SOURCE_VERIFICATION', 'functionalRequirements[1].sourceReferences[2].quote', 'quoteLength', 'normalizedQuoteLength', 'NOT_FOUND']) expect(logs).toContain(expected);
   expect(logs).not.toContain('Unsupported private paraphrase');
-  expect(logs).not.toContain('YAML persistence'); expect(ctx.storage.write).not.toHaveBeenCalled();
+  expect(logs).not.toContain('PERSISTENCE'); expect(ctx.storage.write).not.toHaveBeenCalled();
   expect(ctx.saved()).toEqual(requirementsArtifact());
+});
+
+it('persists repeated complete DevTask analyses with four valid quotes and logs safe reconciliation as success', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { createHash } = await import('node:crypto');
+  const text = readFileSync('tests/fixtures/devtask-prd.md', 'utf8');
+  const input = { ...importedPrd, sizeBytes: Buffer.byteLength(text), contentHash: createHash('sha256').update(text).digest('hex') };
+  const ctx = setup();
+  ctx.projects.read.mockResolvedValue({ ...ctx.manifest, inputs: { prd: input } });
+  ctx.reader.read.mockResolvedValue({ ...input, text });
+  ctx.gateway.sendRequest.mockResolvedValue(readFileSync('tests/fixtures/devtask-analysis.json', 'utf8'));
+  const outputs: string[] = [];
+  for (let run = 0; run < 3; run++) {
+    await ctx.service.analyze(ctx.token); outputs.push(JSON.stringify(ctx.saved()));
+    expect(ctx.saved()?.functionalRequirements[0]?.sourceReferences).toHaveLength(3);
+  }
+  expect(new Set(outputs).size).toBe(1); expect(ctx.storage.write).toHaveBeenCalledTimes(3);
+  const logs = ctx.log.mock.calls.flat().join('\n');
+  for (const stage of ['RAW_SHAPE_VALIDATION', 'SOURCE_VERIFICATION', 'RECONCILIATION', 'CANONICAL_VALIDATION', 'PERSISTENCE']) expect(logs).toContain(stage);
+  expect(logs).toContain('REDUCED_TO_CANONICAL_LIMIT'); expect(logs).toContain('"raw":4'); expect(logs).toContain('"canonical":3');
+  expect(logs).not.toContain('failed'); expect(logs).not.toContain('Registration requires a password');
 });

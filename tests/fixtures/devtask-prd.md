@@ -4,6 +4,9 @@ DevTask is a collaborative project and task management application.
 Project Owners manage projects and invite members. Team Members work on assigned tasks.
 ## Authentication
 Users must register and sign in with email and password.
+Registration requires an email address.
+Registration requires a password.
+Registered users can sign in.
 ## Projects
 Project Owners must be able to create and rename projects.
 ## Tasks

@@ -304,3 +304,16 @@ New analyses require **1–3 source references** per traced item (prefer 1), **1
 5. If the model violates a bound again, retain its structured diagnostic: exact path, minimum, maximum, actualLength and reason. For six constraint references, expect maximum 3 and actualLength 6. The previous valid artifact must remain unchanged.
 
 Live-provider compliance still requires this manual retest; automated fixtures cover deterministic boundary failures without model calls.
+
+
+### TASK-DP-005 reconciliation retest (current behavior)
+
+The prompt still asks for 1–3 references, preferably one. Raw output may contain up to 10: **every quote is verified first**, then identical normalized evidence is deduplicated and the first three distinct verified excerpts are retained in model order. Reconciliation is successful processing. Invalid quotes/categories still fail. Criteria allow 1–20 and are never truncated; top-level requirements are never dropped. This replaces the previous policy of rejecting four references immediately. See [the current architecture](docs/requirements-schema.md#raw-to-canonical-architecture-current-policy).
+
+1. Run `npm run compile`, restart **F5**, and keep the initialized DevTask workspace and configured model. Use the same imported PRD; re-import only if changed.
+2. Open **View → Output → DevPilot**. Run **Analyze PRD** or **Re-analyze PRD** at least **three times**, waiting for each run to finish.
+3. For each run, inspect RAW_SHAPE_VALIDATION → SOURCE_VERIFICATION → RECONCILIATION → CANONICAL_VALIDATION → PERSISTENCE. A 4→3 reduction should log counts/action and finish successfully.
+4. Open `.devpilot/product/requirements.yaml` after every successful run. No newly persisted item may have more than three references; every evidence excerpt must occur in the saved PRD after whitespace normalization. Review that actual requirement/criterion semantics remain intact.
+5. If a run contains fabricated evidence, misplaced categories, missing semantics or exceeds a defensive capacity, expect a precise failure and unchanged previous artifact. Retain that structured diagnostic. Valid reference excess alone should succeed.
+
+Three repeatable full-pipeline runs are covered with a mocked response. Live VS Code provider testing cannot be performed in the headless test suite and remains the manual integration check.

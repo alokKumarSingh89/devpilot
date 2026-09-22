@@ -1,3 +1,4 @@
+import { reconcileRequirements } from './RequirementsReconciler';
 import { AnalysisValidationFailure } from '../../domain/requirements/analysisContract';
 import { validateRawModelStructure, verifyModelSourceReferences } from '../../domain/requirements/validateRawModelAnalysis';
 import { analysisDiagnostic } from './analysisDiagnostics';
@@ -112,14 +113,19 @@ export class PrdAnalysisService {
       analysisDiagnostic(this.log, 'response collected', { responseCharacters: response.length });
       stage = 'response extraction / JSON parsing'; analysisDiagnostic(this.log, stage);
       const parsed = parseAnalysisResponse(response);
-      stage = 'raw validation / safe normalization'; analysisDiagnostic(this.log, stage);
+      stage = 'RAW_SHAPE_VALIDATION'; analysisDiagnostic(this.log, stage);
       const candidate = validateRawModelStructure(parsed);
-      stage = 'source quote verification'; analysisDiagnostic(this.log, stage);
+      analysisDiagnostic(this.log, 'RAW_SHAPE_VALIDATION', { result: 'success' });
+      stage = 'SOURCE_VERIFICATION'; analysisDiagnostic(this.log, stage);
       const raw = verifyModelSourceReferences(candidate, source.document.text);
-      analysisDiagnostic(this.log, 'source quotes verified');
+      analysisDiagnostic(this.log, 'SOURCE_VERIFICATION', { result: 'success' });
+      stage = 'RECONCILIATION'; analysisDiagnostic(this.log, stage);
+      const reconciled = reconcileRequirements(raw);
+      for (const event of reconciled.events) analysisDiagnostic(this.log, 'RECONCILIATION', { ...event });
+      analysisDiagnostic(this.log, 'RECONCILIATION', { result: 'success', changes: reconciled.events.length });
       stage = 'canonicalization'; analysisDiagnostic(this.log, stage);
-      const content = canonicalizeRequirements(raw);
-      stage = 'final artifact validation'; analysisDiagnostic(this.log, stage);
+      const content = canonicalizeRequirements(reconciled.content);
+      stage = 'CANONICAL_VALIDATION'; analysisDiagnostic(this.log, stage);
       const artifact = validateRequirementsArtifact({
         schemaVersion: 1,
         generated: { generatedAt: this.now().toISOString(), projectId: snapshot.project.id,
@@ -127,14 +133,16 @@ export class PrdAnalysisService {
           source: { relativePath: source.input.relativePath, contentHash: source.input.contentHash } },
         ...content,
       });
+      analysisDiagnostic(this.log, 'CANONICAL_VALIDATION', { result: 'success' });
       const beforeCommit = async (): Promise<void> => {
         checkCancellation(token);
         await this.source(workspace, source.manifest);
         checkCancellation(token);
       };
       await beforeCommit();
-      stage = 'YAML persistence'; analysisDiagnostic(this.log, stage);
+      stage = 'PERSISTENCE'; analysisDiagnostic(this.log, stage);
       await this.requirements.write(workspace, artifact, beforeCommit);
+      analysisDiagnostic(this.log, 'PERSISTENCE', { result: 'success' });
       analysisDiagnostic(this.log, 'completed');
       // Rename is the commit point. Cancellation after commit cannot truthfully undo a completed write.
     } catch (error) {

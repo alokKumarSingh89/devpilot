@@ -23,7 +23,7 @@ All fields are required, including arrays that happen to be empty. Unknown field
 
 Priorities are `MUST`, `SHOULD`, `COULD`; confidence is `HIGH`, `MEDIUM`, `LOW`. Confidence describes support in the PRD, not predicted implementation success. NFR categories are `SECURITY`, `PERFORMANCE`, `RELIABILITY`, `SCALABILITY`, `USABILITY`, `OPERABILITY`, `MAINTAINABILITY`, `COMPLIANCE`, `OTHER`. Constraint categories are `TECHNOLOGY`, `BUSINESS`, `REGULATORY`, `RESOURCE`, `OTHER`.
 
-Every functional requirement has 1–8 acceptance criteria (each at most 1,000 characters). `actorIds` has at most 50 unique references to defined actors; it may be empty for behavior without a specified actor. `measurableTarget` is a nonempty string of at most 1,000 characters, or `null` when the PRD states no numeric/verifiable target. DevPilot does not invent a target to fill that field.
+Every functional requirement has 1–20 acceptance criteria (each at most 1,000 characters). `actorIds` has at most 50 unique references to defined actors; it may be empty for behavior without a specified actor. `measurableTarget` is a nonempty string of at most 1,000 characters, or `null` when the PRD states no numeric/verifiable target. DevPilot does not invent a target to fill that field.
 
 ## Traceability and identifiers
 
@@ -154,3 +154,29 @@ Schema-v1 compatibility is deliberate: YAML **reads only** retain the old maxima
 Prompt cleanup replaces repeated JSON schema boilerplate with a compact schema description generated from the same contract and removes repeated explanations. Measured with the same local DevTask fixture: fixed instructions plus empty data wrapper fell from 10,012 to 6,812 characters (32%); the complete fixture prompt fell from 11,263 to 8,063 characters. These are local measurements, not a claim about the user's larger real PRD. Trust boundaries, classification, exact quotes, enum/null rules and the tested JSON example remain.
 
 Boundary tests cover every traced collection at 0/1/3/4 references, criteria at 0/1/8/9, all six top-level caps, actor referential integrity at 50/51 links, every schema string bound, and read-only legacy compatibility. `oversized-analysis.json` is a fake complete response containing 201 actors, 9 criteria and 6 references; tests isolate each violation and assert exact diagnostics. The realistic DevTask fixture continues through the full pipeline.
+
+## Raw-to-canonical architecture (current policy)
+
+This section supersedes the previous strict-raw 3-reference / 8-criterion policy. Repeated model failures showed that the ideal/canonical reference maximum had been applied prematurely at the raw boundary. Four valid source quotations are not equivalent to an invented quotation or a wrong semantic category.
+
+The pipeline is now extraction/JSON parsing → RAW_SHAPE_VALIDATION (required fields, types, known enums, whitespace/casing normalization, referential integrity, defensive capacities) → SOURCE_VERIFICATION of **every** candidate → RECONCILIATION of verified provenance → canonical IDs → CANONICAL_VALIDATION → atomic PERSISTENCE. Verification deliberately precedes evidence reduction so an invalid tail cannot disappear. All candidate processing remains in memory until the full strict artifact is valid.
+
+There are three explicit contracts derived from shared definitions:
+
+- `IDEAL_MODEL_REQUIREMENTS_CONTRACT`: the prompt asks for 1–3 references, preferably one.
+- `RAW_MODEL_REQUIREMENTS_CONTRACT`: accepts 1–10 candidate references as a defensive ceiling. It is distinct from the persisted-artifact validator; raw content has local actor keys and `quote`, not final IDs/provenance.
+- Canonical contract: retains 1–3 verified `evidence` references and validates final DevPilot IDs/metadata.
+
+Only source-reference count has different raw and canonical bounds. Acceptance criteria are **1–20** in both, restoring generous semantic capacity; 2–5 remain the prompt's usual recommendation. Criteria are never truncated or deduplicated. Actor references stay 0–50; every top-level collection remains 0–200 and is never reduced. Existing string, token, response/YAML and nesting limits remain. Beyond these capacities analysis fails explicitly; no chunking or additional model call is introduced.
+
+`RequirementsReconciler` is editor-, transport- and filesystem-independent application logic. Its input is source-verified content. For each reference collection it preserves model order, deduplicates identical normalized evidence even if section labels differ, retains the first section label for that evidence, and selects the first three distinct verified excerpts. It preserves item text, priorities, actor links, acceptance criteria and all top-level item counts. Same input/order produces byte-equivalent semantic canonical output; generation timestamps remain separate provenance.
+
+All provided quotes—including duplicates and candidates beyond position three—must first verify against the PRD. Three valid quotes plus a fabricated fourth **fails**, as does an invalid tenth. Four or ten verified distinct quotes reduce to three. Eleven candidates fail raw validation. Reduction affects supporting provenance only; it does not claim to establish semantic correctness or remove a requirement. Human review remains necessary.
+
+Each changed collection emits a safe structured reconciliation event: `path`, `raw`, `verified`, `deduplicated`, `canonical`, and `action` (`DEDUPLICATED` or `REDUCED_TO_CANONICAL_LIMIT`). Stages RAW_SHAPE_VALIDATION, SOURCE_VERIFICATION, RECONCILIATION, CANONICAL_VALIDATION and PERSISTENCE have explicit success diagnostics. No quotation or response body is logged and no failure UI is shown for safe variance.
+
+Forbidden transformations remain unchanged: no invented content or actors, semantic paraphrase matching, unknown-enum guessing, OPERABILITY-to-OTHER mapping, automatic collection relocation, priority changes, acceptance-criterion truncation, dropped top-level requirements, or model-based repair. Exact source verification, classification checks, cancellation, concurrency guards, source-hash rechecks and atomic artifact preservation remain mandatory.
+
+The prompt remains compact and ideal-oriented; its exact schema uses 1–3 references despite the raw parser's defensive ceiling of ten. It does not advertise excess-reference output. Schema remains version 1; legacy read compatibility still allows previously written five-reference artifacts, while every new write is strictly canonical.
+
+Tests cover 1/3/4/10/11 raw references, verified deduplication and ordering, fabricated fourth/tenth quotes, strict canonical rejection of unreconciled content, all five traced collections, unchanged criteria up to twenty, semantic/enum rejection, safe reconciliation events, and three consecutive mocked full-pipeline DevTask runs with four real source quotes. Mocked runs are not live provider integration tests.

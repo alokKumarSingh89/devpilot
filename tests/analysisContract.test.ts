@@ -1,7 +1,8 @@
+import { reconcileRequirements } from '../src/application/analysis/RequirementsReconciler';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { AnalysisValidationFailure, RAW_MODEL_REQUIREMENTS_CONTRACT } from '../src/domain/requirements/analysisContract';
+import { AnalysisValidationFailure, IDEAL_MODEL_REQUIREMENTS_CONTRACT } from '../src/domain/requirements/analysisContract';
 import { validateRawModelAnalysis } from '../src/domain/requirements/validateRawModelAnalysis';
 import { validateRequirementsArtifact } from '../src/domain/requirements/validateRequirements';
 import { compilePrdAnalysisPrompt, describeAnalysisContract } from '../src/application/analysis/compilePrdAnalysisPrompt';
@@ -24,7 +25,7 @@ function diagnostic(value: unknown) {
 describe('realistic model-content contract', () => {
   it.each([response, ` \n${response}\n `, `\`\`\`json\n${response}\n\`\`\``])('runs extraction, raw validation/normalization, canonicalization and final validation', (text) => {
     const content = validateRawModelAnalysis(parseAnalysisResponse(text), prd);
-    const canonical = canonicalizeRequirements(content);
+    const canonical = canonicalizeRequirements(reconcileRequirements(content).content);
     const artifact = validateRequirementsArtifact({ ...requirementsArtifact(), ...canonical, generated: { ...requirementsArtifact().generated, source: { relativePath: 'PRD.md', contentHash: createHash('sha256').update(prd).digest('hex') } } });
     expect(artifact.product.name).toBe('DevTask'); expect(artifact.actors.map((item) => item.name)).toEqual(['Project Owner', 'Team Member']);
     expect(artifact.functionalRequirements).toHaveLength(3); expect(artifact.nonFunctionalRequirements).toHaveLength(4);
@@ -34,13 +35,13 @@ describe('realistic model-content contract', () => {
     expect(artifact.outOfScope[0]?.description).toContain('Mobile'); expect(artifact.openQuestions[0]?.question).toContain('invitations');
     expect(artifact.functionalRequirements[0]?.priority).toBe('MUST'); expect(artifact.nonFunctionalRequirements[0]?.category).toBe('SECURITY');
     expect(artifact.functionalRequirements[0]?.sourceReferences[0]?.section).toBe('4. Authentication');
-    expect(canonicalizeRequirements(content)).toEqual(canonical);
+    expect(canonicalizeRequirements(reconcileRequirements(content).content)).toEqual(canonical);
     expect(canonical.functionalRequirements[0]?.actorIds).toEqual([canonical.actors[1]?.id]);
     expect(JSON.stringify(artifact)).not.toContain('"key":');
   });
   it('uses the identical authoritative contract in the prompt and has no model-owned provenance/IDs', () => {
     const prompt = compilePrdAnalysisPrompt(prd);
-    expect(prompt).toContain(describeAnalysisContract(RAW_MODEL_REQUIREMENTS_CONTRACT));
+    expect(prompt).toContain(describeAnalysisContract(IDEAL_MODEL_REQUIREMENTS_CONTRACT));
     expect(prompt).toContain('There are NO optional fields'); expect(prompt).toContain('measurableTarget permits null');
     expect(raw()).not.toHaveProperty('generated'); expect(raw()).not.toHaveProperty('schemaVersion');
     expect(() => validateRawModelAnalysis({ ...raw(), generated: {} }, prd)).toThrow();

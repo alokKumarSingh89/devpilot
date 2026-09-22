@@ -1,4 +1,4 @@
-import { TOP_LEVEL_LIMITS, ITEM_LIMITS, TEXT_LIMITS, LEGACY_ARTIFACT_LIMITS } from './analysisLimits';
+import { RAW_SOURCE_REFERENCE_LIMITS, TOP_LEVEL_LIMITS, ITEM_LIMITS, TEXT_LIMITS, LEGACY_ARTIFACT_LIMITS } from './analysisLimits';
 import { AnalysisFailure } from './AnalysisFailure';
 import { CONFIDENCES, CONSTRAINT_CATEGORIES, NFR_CATEGORIES, PRIORITIES } from './requirements';
 
@@ -15,9 +15,9 @@ const enumeration = (values: readonly string[]): Contract => ({ type: 'string', 
 const object = (properties: Readonly<Record<string, Contract>>): Contract => ({ type: 'object', properties });
 const array = (items: Contract, limits: { readonly min: number; readonly max: number }): Contract => ({ type: 'array', items, minItems: limits.min, maxItems: limits.max });
 /** Every declared property is required. Null is allowed only when nullable is true. No additional properties. */
-export function requirementsContract(canonical = false, legacyArtifact = false): Contract {
+export function requirementsContract(canonical = false, legacyArtifact = false, rawDefensive = true): Contract {
   const bounds = canonical && legacyArtifact ? LEGACY_ARTIFACT_LIMITS : ITEM_LIMITS;
-  const references = array(object({ section: string(TEXT_LIMITS.section), [canonical ? 'evidence' : 'quote']: string(TEXT_LIMITS.quote) }), bounds.sourceReferences);
+  const references = array(object({ section: string(TEXT_LIMITS.section), [canonical ? 'evidence' : 'quote']: string(TEXT_LIMITS.quote) }), !canonical && rawDefensive ? RAW_SOURCE_REFERENCE_LIMITS : bounds.sourceReferences);
   const identity = canonical ? { id: string(TEXT_LIMITS.canonicalId) } : {};
   return object({
     product: object({ name: string(TEXT_LIMITS.name), summary: string(TEXT_LIMITS.summary) }),
@@ -33,6 +33,7 @@ export function requirementsContract(canonical = false, legacyArtifact = false):
   });
 }
 export const RAW_MODEL_REQUIREMENTS_CONTRACT = requirementsContract();
+export const IDEAL_MODEL_REQUIREMENTS_CONTRACT = requirementsContract(false, false, false);
 export function diagnosticFailure(path: string, expected: string, value: unknown, reason: string): never {
   // Do not echo arbitrary model strings, object keys, evidence or parser exception text into logs.
   const received = value === null ? 'null' : Array.isArray(value) ? `array(length=${value.length})`

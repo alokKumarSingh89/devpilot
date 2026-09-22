@@ -30,6 +30,18 @@
         {
           "section": "4. Authentication",
           "quote": "Users must register and sign in with email and password."
+        },
+        {
+          "section": "Authentication",
+          "quote": "Registration requires an email address."
+        },
+        {
+          "section": "Authentication",
+          "quote": "Registration requires a password."
+        },
+        {
+          "section": "Authentication",
+          "quote": "Registered users can sign in."
         }
       ],
       "confidence": "High"

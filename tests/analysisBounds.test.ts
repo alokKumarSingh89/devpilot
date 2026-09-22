@@ -17,16 +17,16 @@ function fail(value: unknown, path: string, min: number, max: number, count: num
   expect(() => validateRawModelStructure(value)).toThrow(expect.objectContaining({ diagnostic: expect.objectContaining({ path, minimum: min, maximum: max, actualLength: count }) }));
 }
 describe('bounded contract consistency', () => {
-  it.each(collections)('%s permits one or three verified references, rejects zero and four without truncation', (collection) => {
-    for (const count of [1, 3]) expect(validateRawModelAnalysis(refs(collection, count), prdText)[collection][0]?.sourceReferences).toHaveLength(count);
-    for (const count of [0, 4]) { const raw = refs(collection, count); const before = JSON.stringify(raw); fail(raw, `${collection}[0].sourceReferences`, 1, 3, count); expect(JSON.stringify(raw)).toBe(before); }
+  it.each(collections)('%s permits one, three or four raw references, rejects zero and eleven', (collection) => {
+    for (const count of [1, 3, 4]) expect(validateRawModelAnalysis(refs(collection, count), prdText)[collection][0]?.sourceReferences).toHaveLength(count);
+    for (const count of [0, 11]) { const raw = refs(collection, count); const before = JSON.stringify(raw); fail(raw, `${collection}[0].sourceReferences`, 1, 10, count); expect(JSON.stringify(raw)).toBe(before); }
   });
-  it('accepts 1..8 acceptance criteria and rejects 0/9 with precise diagnostics', () => {
+  it('accepts 1..20 acceptance criteria and rejects 0/21 with precise diagnostics', () => {
     const raw = rawRequirementsContent();
-    for (const count of [0, 1, 8, 9]) {
+    for (const count of [0, 1, 20, 21]) {
       const value = { ...raw, functionalRequirements: raw.functionalRequirements.map((item, index) => index === 0 ? { ...item, acceptanceCriteria: Array.from({ length: count }, () => 'Users can sign in.') } : item) };
-      if (count === 1 || count === 8) expect(validateRawModelStructure(value).functionalRequirements[0]?.acceptanceCriteria).toHaveLength(count);
-      else fail(value, 'functionalRequirements[0].acceptanceCriteria', 1, 8, count);
+      if (count === 1 || count === 20) expect(validateRawModelStructure(value).functionalRequirements[0]?.acceptanceCriteria).toHaveLength(count);
+      else fail(value, 'functionalRequirements[0].acceptanceCriteria', 1, 20, count);
     }
   });
   it.each(Object.keys(TOP_LEVEL_LIMITS) as (keyof typeof TOP_LEVEL_LIMITS)[])('%s keeps generous declared top-level limits', (collection) => {
@@ -49,8 +49,8 @@ describe('bounded contract consistency', () => {
     const prompt = compilePrdAnalysisPrompt('');
     expect(prompt).toContain('STRICT COLLECTION LIMITS'); expect(prompt).toContain('prefer exactly 1');
     for (const [key, bounds] of Object.entries(ITEM_LIMITS)) expect(prompt).toContain(`${key}: ${bounds.min}..${bounds.max}`);
-    expect(prompt).toContain('never more than 3'); expect(prompt).toContain('normally 2-5'); expect(prompt).toContain('never more than 8');
-    expect(prompt).not.toContain('hard maximum 5'); expect(prompt).not.toContain('1..20');
+    expect(prompt).toContain('never more than 3'); expect(prompt).toContain('normally 2-5'); expect(prompt).toContain('never more than 20');
+    expect(prompt).not.toContain('hard maximum 5');
   });
   it('enforces all declared string bounds without truncation', () => {
     function check(contract: typeof RAW_MODEL_REQUIREMENTS_CONTRACT) {
@@ -81,8 +81,8 @@ describe('adversarial oversized model response', () => {
   it('rejects each independent overrun deterministically rather than keeping a prefix', () => {
     fail(response, 'actors', 0, 200, 201);
     const raw = rawRequirementsContent();
-    fail({ ...raw, constraints: response.constraints }, 'constraints[0].sourceReferences', 1, 3, 6);
-    fail({ ...raw, functionalRequirements: response.functionalRequirements }, 'functionalRequirements[0].acceptanceCriteria', 1, 8, 9);
+    fail({ ...raw, constraints: response.constraints }, 'constraints[0].sourceReferences', 1, 10, 11);
+    fail({ ...raw, functionalRequirements: response.functionalRequirements }, 'functionalRequirements[0].acceptanceCriteria', 1, 20, 21);
   });
   it('accepts the realistic DevTask fixture with the new limits and traceability checks', () => {
     const value: unknown = JSON.parse(readFileSync('tests/fixtures/devtask-analysis.json', 'utf8'));
