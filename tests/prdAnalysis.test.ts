@@ -8,7 +8,7 @@ import type { RequirementsArtifact } from '../src/domain/requirements/requiremen
 import type { ProjectManifest } from '../src/domain/project';
 import type { ProjectWorkspace } from '../src/application/projects/ports';
 import { renderAnalysis } from '../src/presentation/controlCenter/renderAnalysis';
-import { analysisModel, importedPrd, prdText, requirementsArtifact, requirementsContent } from './requirementsFixture';
+import { analysisModel, importedPrd, prdText, requirementsArtifact, rawRequirementsContent } from './requirementsFixture';
 import { projectFixture } from './projectFixture';
 
 function token() {
@@ -25,14 +25,15 @@ function setup() {
   const projects = { read: vi.fn<() => Promise<ProjectManifest | undefined>>().mockResolvedValue(manifest) };
   const reader = { read: vi.fn().mockResolvedValue({ ...importedPrd, text: prdText }) };
   const models = { state: { status: 'READY', models: [analysisModel], selected: analysisModel } as ModelState, requireReady: vi.fn().mockResolvedValue({ status: 'READY' as const, models: [analysisModel], selected: analysisModel }) };
-  const gateway = { sendRequest: vi.fn().mockResolvedValue(JSON.stringify(requirementsContent())) };
+  const gateway = { sendRequest: vi.fn().mockResolvedValue(JSON.stringify(rawRequirementsContent())) };
   let saved: RequirementsArtifact | undefined;
   const storage = {
     read: vi.fn(async () => saved),
     write: vi.fn(async (_workspace: ProjectWorkspace, artifact: RequirementsArtifact, beforeCommit: () => Promise<void>) => { await beforeCommit(); saved = artifact; }),
   };
-  const service = new PrdAnalysisService(context, projects, reader, models, gateway, storage, () => new Date('2026-09-21T12:00:00.000Z'));
-  return { service, workspace, context, manifest, projects, reader, models, gateway, storage, token: token(), saved: () => saved, setSaved: (value: RequirementsArtifact) => { saved = value; } };
+  const log = vi.fn();
+  const service = new PrdAnalysisService(context, projects, reader, models, gateway, storage, () => new Date('2026-09-21T12:00:00.000Z'), log);
+  return { service, log, workspace, context, manifest, projects, reader, models, gateway, storage, token: token(), saved: () => saved, setSaved: (value: RequirementsArtifact) => { saved = value; } };
 }
 
 describe('analysis application preconditions', () => {
@@ -84,7 +85,7 @@ describe('analysis application preconditions', () => {
 describe('validated requirements pipeline', () => {
   it('sends through the gateway, canonicalizes output, persists trusted provenance and never updates project status', async () => {
     const ctx = setup(); await ctx.service.analyze(ctx.token);
-    expect(ctx.gateway.sendRequest).toHaveBeenCalledWith(analysisModel.id, expect.stringContaining('UNTRUSTED_PRD_JSON'), expect.anything(), expect.objectContaining({ purpose: 'prdAnalysis', maxResponseCharacters: 262144, outputHeadroomTokens: 4096 }));
+    expect(ctx.gateway.sendRequest).toHaveBeenCalledWith(analysisModel.id, expect.stringContaining('UNTRUSTED_PRD_JSON'), expect.anything(), expect.objectContaining({ purpose: 'prdAnalysis', maxResponseCharacters: 262144, outputHeadroomTokens: 8192 }));
     expect(ctx.storage.write).toHaveBeenCalledOnce();
     expect(ctx.saved()?.generated).toEqual(requirementsArtifact().generated);
     expect(ctx.saved()?.functionalRequirements[0]?.id).not.toBe('FR-AUTH-001');
@@ -110,7 +111,7 @@ describe('validated requirements pipeline', () => {
     const ctx = setup(); ctx.setSaved(requirementsArtifact());
     ctx.gateway.sendRequest.mockImplementation(async () => {
       ctx.reader.read.mockResolvedValue({ ...importedPrd, text: 'edited', contentHash: 'b'.repeat(64) });
-      return JSON.stringify(requirementsContent());
+      return JSON.stringify(rawRequirementsContent());
     });
     await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ code: 'CHANGED' });
     expect(ctx.storage.write).not.toHaveBeenCalled(); expect(ctx.saved()).toEqual(requirementsArtifact());
@@ -121,7 +122,7 @@ describe('validated requirements pipeline', () => {
         if (change === 'root') ctx.context.current.mockReturnValue({ ...ctx.workspace, key: 'file:///elsewhere' });
         else if (change === 'project') ctx.projects.read.mockResolvedValue({ ...ctx.manifest, project: { ...ctx.manifest.project, name: 'changed' } });
         else ctx.projects.read.mockResolvedValue({ ...ctx.manifest, inputs: { prd: { ...importedPrd, importedAt: '2026-09-21T13:00:00.000Z' } } });
-        return JSON.stringify(requirementsContent());
+        return JSON.stringify(rawRequirementsContent());
       });
       await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ code: 'CONFLICT' });
       expect(ctx.storage.write).not.toHaveBeenCalled();
@@ -177,12 +178,12 @@ describe('analysis concurrency and cancellation', () => {
     await vi.waitFor(() => expect(ctx.gateway.sendRequest).toHaveBeenCalledOnce());
     expect((await ctx.service.evaluate(ctx.workspace, ctx.manifest)).status).toBe('ANALYZING');
     await expect(ctx.service.analyze(token())).rejects.toMatchObject({ code: 'BUSY' });
-    finish(JSON.stringify(requirementsContent())); await running;
+    finish(JSON.stringify(rawRequirementsContent())); await running;
     expect(ctx.storage.write).toHaveBeenCalledOnce();
   });
   it.each([false, true])('cancelled response restores prior state; existing artifact=%s', async (existing) => {
     const ctx = setup(); if (existing) ctx.setSaved(requirementsArtifact());
-    ctx.gateway.sendRequest.mockImplementation(async () => { ctx.token.cancel(); return JSON.stringify(requirementsContent()); });
+    ctx.gateway.sendRequest.mockImplementation(async () => { ctx.token.cancel(); return JSON.stringify(rawRequirementsContent()); });
     await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ code: 'CANCELLED' });
     expect(ctx.storage.write).not.toHaveBeenCalled();
     expect((await ctx.service.evaluate(ctx.workspace, ctx.manifest)).status).toBe(existing ? 'ANALYZED' : 'NOT_ANALYZED');
@@ -199,7 +200,7 @@ describe('analysis concurrency and cancellation', () => {
   });
   it('disposal cancels active work and disposes subscriptions', async () => {
     const ctx = setup(); const listener = vi.fn(); ctx.service.onDidChange(listener);
-    ctx.gateway.sendRequest.mockImplementation(async () => { ctx.service.dispose(); return JSON.stringify(requirementsContent()); });
+    ctx.gateway.sendRequest.mockImplementation(async () => { ctx.service.dispose(); return JSON.stringify(rawRequirementsContent()); });
     await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ code: 'CANCELLED' });
     expect(ctx.storage.write).not.toHaveBeenCalled(); expect(ctx.token.listeners.size).toBe(0);
     expect(listener).toHaveBeenCalledOnce();
@@ -215,4 +216,57 @@ it('does not send after the model preference is cleared during source preflight'
   });
   await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ code: 'SELECTION_REQUIRED' });
   expect(ctx.gateway.sendRequest).not.toHaveBeenCalled();
+});
+
+it.each([false, true])('reports the actual artifact outcome and precise safe diagnostics; existing=%s', async (existing) => {
+  const ctx = setup(); if (existing) ctx.setSaved(requirementsArtifact());
+  const raw = rawRequirementsContent();
+  ctx.gateway.sendRequest.mockResolvedValue(JSON.stringify({ ...raw, functionalRequirements: raw.functionalRequirements.map((item, index) => index === 0 ? { ...item, priority: 'HIGH' } : item) }));
+  await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ message: expect.stringContaining(existing ? 'The previous requirements artifact was preserved.' : 'No requirements artifact was created.') });
+  expect(ctx.storage.write).not.toHaveBeenCalled();
+  const logs = ctx.log.mock.calls.flat().join('\n');
+  for (const expected of ['started', 'modelId', 'prdBytes', 'promptCharacters', 'responseCharacters', 'RAW_SHAPE_VALIDATION', 'functionalRequirements[0].priority', 'MUST | SHOULD | COULD', 'HIGH']) expect(logs).toContain(expected);
+  expect(logs).not.toContain(prdText); expect(logs).not.toContain('Users must be able to create an account');
+  expect(await ctx.service.evaluate(ctx.workspace, ctx.manifest)).toMatchObject({ status: 'FAILED', message: expect.stringContaining(existing ? 'preserved' : 'No requirements artifact was created') });
+});
+
+it('does not recreate a project deleted while a response is in flight', async () => {
+  const ctx = setup();
+  ctx.gateway.sendRequest.mockImplementation(async () => { ctx.projects.read.mockResolvedValue(undefined); return JSON.stringify(rawRequirementsContent()); });
+  await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ code: 'PROJECT_REQUIRED' });
+  expect(ctx.storage.write).not.toHaveBeenCalled();
+});
+
+it('logs a distinct source-verification failure and preserves the previous artifact', async () => {
+  const ctx = setup(); ctx.setSaved(requirementsArtifact());
+  const raw = rawRequirementsContent();
+  const valid = { section: 'Tasks', quote: 'Users must be able to create tasks with a title.' };
+  ctx.gateway.sendRequest.mockResolvedValue(JSON.stringify({ ...raw, functionalRequirements: raw.functionalRequirements.map((item, index) => index === 1 ? { ...item, sourceReferences: [valid, valid, { section: 'Tasks', quote: 'Unsupported private paraphrase.' }] } : item) }));
+  await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ code: 'INVALID_OUTPUT' });
+  const logs = ctx.log.mock.calls.flat().join('\n');
+  for (const expected of ['SOURCE_VERIFICATION', 'functionalRequirements[1].sourceReferences[2].quote', 'quoteLength', 'normalizedQuoteLength', 'NOT_FOUND']) expect(logs).toContain(expected);
+  expect(logs).not.toContain('Unsupported private paraphrase');
+  expect(logs).not.toContain('PERSISTENCE'); expect(ctx.storage.write).not.toHaveBeenCalled();
+  expect(ctx.saved()).toEqual(requirementsArtifact());
+});
+
+it('persists repeated complete DevTask analyses with four valid quotes and logs safe reconciliation as success', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { createHash } = await import('node:crypto');
+  const text = readFileSync('tests/fixtures/devtask-prd.md', 'utf8');
+  const input = { ...importedPrd, sizeBytes: Buffer.byteLength(text), contentHash: createHash('sha256').update(text).digest('hex') };
+  const ctx = setup();
+  ctx.projects.read.mockResolvedValue({ ...ctx.manifest, inputs: { prd: input } });
+  ctx.reader.read.mockResolvedValue({ ...input, text });
+  ctx.gateway.sendRequest.mockResolvedValue(readFileSync('tests/fixtures/devtask-analysis.json', 'utf8'));
+  const outputs: string[] = [];
+  for (let run = 0; run < 3; run++) {
+    await ctx.service.analyze(ctx.token); outputs.push(JSON.stringify(ctx.saved()));
+    expect(ctx.saved()?.functionalRequirements[0]?.sourceReferences).toHaveLength(3);
+  }
+  expect(new Set(outputs).size).toBe(1); expect(ctx.storage.write).toHaveBeenCalledTimes(3);
+  const logs = ctx.log.mock.calls.flat().join('\n');
+  for (const stage of ['RAW_SHAPE_VALIDATION', 'SOURCE_VERIFICATION', 'RECONCILIATION', 'CANONICAL_VALIDATION', 'PERSISTENCE']) expect(logs).toContain(stage);
+  expect(logs).toContain('REDUCED_TO_CANONICAL_LIMIT'); expect(logs).toContain('"raw":4'); expect(logs).toContain('"canonical":3');
+  expect(logs).not.toContain('failed'); expect(logs).not.toContain('Registration requires a password');
 });

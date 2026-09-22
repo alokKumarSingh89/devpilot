@@ -1,5 +1,7 @@
 /** Only these static commands may be invoked by the script-free webview. */
 export const controlCenterActions = {
+  scanCodebase: 'devpilot.scanCodebase',
+  openInventory: 'devpilot.openRepositoryInventory',
   analyzePrd: 'devpilot.analyzePrd',
   openRequirements: 'devpilot.openRequirements',
   openFolder: 'devpilot.openFolder',

@@ -9,7 +9,7 @@ export function parseRequirementsYaml(text: string): RequirementsArtifact {
     const document = parseDocument(text, { schema: 'core', version: '1.2', uniqueKeys: true, prettyErrors: false });
     if (document.errors.length || document.warnings.length) throw new AnalysisFailure('INVALID_ARTIFACT');
     const data: unknown = document.toJS({ maxAliasCount: 0 });
-    return validateRequirementsArtifact(data);
+    return validateRequirementsArtifact(data, true);
   } catch { throw new AnalysisFailure('INVALID_ARTIFACT'); }
 }
 export function serializeRequirementsYaml(value: RequirementsArtifact): string {

@@ -76,6 +76,16 @@
         "command": "devpilot.openRequirements",
         "title": "View Requirements",
         "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.scanCodebase",
+        "title": "Scan Codebase",
+        "category": "DevPilot"
+      },
+      {
+        "command": "devpilot.openRepositoryInventory",
+        "title": "View Repository Inventory",
+        "category": "DevPilot"
       }
     ],
     "viewsContainers": {
@@ -106,6 +116,46 @@
           "maximum": 16777216,
           "scope": "resource",
           "description": "Maximum UTF-8 requirements document size in bytes. Documents exceeding this limit are rejected, never truncated."
+        },
+        "devpilot.inventory.maxFiles": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 1,
+          "maximum": 20000,
+          "scope": "resource",
+          "description": "Repository inventory safety bound: maxFiles. Reaching a bound is reported as incomplete scan coverage."
+        },
+        "devpilot.inventory.maxManifests": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 1,
+          "maximum": 500,
+          "scope": "resource",
+          "description": "Repository inventory safety bound: maxManifests. Reaching a bound is reported as incomplete scan coverage."
+        },
+        "devpilot.inventory.maxImportantFiles": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 300,
+          "scope": "resource",
+          "description": "Repository inventory safety bound: maxImportantFiles. Reaching a bound is reported as incomplete scan coverage."
+        },
+        "devpilot.inventory.maxMetadataBytes": {
+          "type": "integer",
+          "default": 131072,
+          "minimum": 1,
+          "maximum": 524288,
+          "scope": "resource",
+          "description": "Repository inventory safety bound: maxMetadataBytes. Reaching a bound is reported as incomplete scan coverage."
+        },
+        "devpilot.inventory.maxPackages": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 200,
+          "scope": "resource",
+          "description": "Repository inventory safety bound: maxPackages. Reaching a bound is reported as incomplete scan coverage."
         }
       }
     }

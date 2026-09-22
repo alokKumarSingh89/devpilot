@@ -47,6 +47,10 @@ export class WorkspaceModelSelectionStore implements ModelSelectionStore {
 export class VscodeLanguageModelGateway implements LanguageModelGateway, vscode.Disposable {
   private readonly activeSources = new Set<vscode.CancellationTokenSource>();
   private disposed = false;
+  constructor(private readonly log: (message: string) => void = () => undefined) {}
+  private diagnostic(message: string): void {
+    try { this.log(`PRD analysis transport: ${message}`); } catch { /* Diagnostics cannot fail a request. */ }
+  }
 
   dispose(): void {
     this.disposed = true;
@@ -79,12 +83,14 @@ export class VscodeLanguageModelGateway implements LanguageModelGateway, vscode.
         checkCancellation(cancellation);
         checkCancellation(source.token);
         const capacity = model.maxInputTokens;
+        this.diagnostic(`inputTokens=${count}, maxInputTokens=${capacity}, outputHeadroomTokens=${options.outputHeadroomTokens}, framingTokens=256`);
         // maxInputTokens is not a total-context/output guarantee. Reserve both proportional slack and explicit headroom.
         if (!Number.isSafeInteger(capacity) || capacity <= 0 || !Number.isSafeInteger(count) || count < 1
           || count + 256 > Math.min(Math.floor(capacity * 0.75), capacity - options.outputHeadroomTokens)) throw new ModelFailure('CONTEXT_LIMIT');
       }
       const response = await awaitCancellation(model.sendRequest([message], options ? { justification: 'Analyze your explicitly imported PRD into structured requirements.' } : {}, source.token), source.token);
       let text = '';
+      let fragments = 0;
       const iterator = response.text[Symbol.asyncIterator]();
       let complete = false;
       try {
@@ -94,7 +100,7 @@ export class VscodeLanguageModelGateway implements LanguageModelGateway, vscode.
           const fragment = next.value;
           checkCancellation(cancellation);
           checkCancellation(source.token);
-          text += fragment;
+          text += fragment; fragments++;
           if (text.length > (options?.maxResponseCharacters ?? 8192)) {
             source.cancel();
             throw new ModelFailure(options ? 'RESPONSE_LIMIT' : 'PROVIDER');
@@ -109,6 +115,7 @@ export class VscodeLanguageModelGateway implements LanguageModelGateway, vscode.
       }
       checkCancellation(cancellation);
       checkCancellation(source.token);
+      if (options) this.diagnostic(`streamComplete=true, fragments=${fragments}, responseCharacters=${text.length}`);
       return text;
     } catch (error) {
       if (cancellation.isCancellationRequested || this.disposed) throw new ModelFailure('CANCELLED');

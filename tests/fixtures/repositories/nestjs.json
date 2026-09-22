@@ -1,0 +1,11 @@
+{
+  "package.json": "{\"name\":\"tiny-api\",\"packageManager\":\"npm@10.0.0\",\"dependencies\":{\"@nestjs/core\":\"1\"},\"devDependencies\":{\"vitest\":\"1\",\"esbuild\":\"1\",\"typescript\":\"1\"},\"scripts\":{\"postinstall\":\"NEVER_EXECUTE_THIS\"}}",
+  "package-lock.json": "{}",
+  "tsconfig.json": "{\"compilerOptions\":{\"strict\":true}}",
+  "src/main.ts": "ordinary source should never be read",
+  "src/app.module.ts": "ordinary source should never be read",
+  "src/app.spec.ts": "test source should never execute",
+  "src/app.test.ts": "test source should never execute",
+  "Dockerfile": "FROM node:22",
+  ".github/workflows/test.yml": "name: test"
+}

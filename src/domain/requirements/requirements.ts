@@ -1,5 +1,6 @@
 export const REQUIREMENTS_SCHEMA_VERSION = 1;
-export const MAX_EVIDENCE_LENGTH = 300;
+import { TEXT_LIMITS } from './analysisLimits';
+export const MAX_EVIDENCE_LENGTH = TEXT_LIMITS.quote;
 export const MAX_REQUIREMENTS_BYTES = 1024 * 1024;
 export const MAX_ANALYSIS_RESPONSE_CHARACTERS = 256 * 1024;
 export const PRIORITIES = ['MUST', 'SHOULD', 'COULD'] as const;
@@ -43,3 +44,27 @@ export type AnalysisState =
   | { readonly status: 'NOT_ANALYZED' | 'ANALYZING' }
   | { readonly status: 'ANALYZED' | 'STALE'; readonly artifact: RequirementsArtifact }
   | { readonly status: 'FAILED'; readonly message: string; readonly artifact?: RequirementsArtifact };
+
+/** Validated content with source-verified evidence; actor keys remain local until canonicalization. */
+export interface VerifiedRequirementsAnalysis {
+  readonly product: RequirementsContent['product'];
+  readonly actors: readonly { readonly key: string; readonly name: string; readonly description: string }[];
+  readonly functionalRequirements: readonly Omit<FunctionalRequirement, 'id'>[];
+  readonly nonFunctionalRequirements: readonly Omit<NonFunctionalRequirement, 'id'>[];
+  readonly constraints: readonly Omit<Constraint, 'id'>[];
+  readonly outOfScope: readonly Omit<OutOfScope, 'id'>[];
+  readonly openQuestions: readonly Omit<OpenQuestion, 'id'>[];
+}
+export type CanonicalRequirementsArtifact = RequirementsArtifact;
+
+export interface RawModelSourceReference { readonly section: string; readonly quote: string }
+type CandidateQuotes<T> = Omit<T, 'sourceReferences'> & { readonly sourceReferences: readonly RawModelSourceReference[] };
+export interface RawModelRequirementsAnalysis {
+  readonly product: VerifiedRequirementsAnalysis['product'];
+  readonly actors: VerifiedRequirementsAnalysis['actors'];
+  readonly functionalRequirements: readonly CandidateQuotes<Omit<FunctionalRequirement, 'id'>>[];
+  readonly nonFunctionalRequirements: readonly CandidateQuotes<Omit<NonFunctionalRequirement, 'id'>>[];
+  readonly constraints: readonly CandidateQuotes<Omit<Constraint, 'id'>>[];
+  readonly outOfScope: readonly CandidateQuotes<Omit<OutOfScope, 'id'>>[];
+  readonly openQuestions: readonly CandidateQuotes<Omit<OpenQuestion, 'id'>>[];
+}

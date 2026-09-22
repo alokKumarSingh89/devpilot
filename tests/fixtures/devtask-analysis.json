@@ -1,0 +1,204 @@
+{
+  "product": {
+    "name": "DevTask",
+    "summary": "Collaborative project and task management."
+  },
+  "actors": [
+    {
+      "key": "owner",
+      "name": "Project Owner",
+      "description": "Manages projects and invites members."
+    },
+    {
+      "key": "member",
+      "name": "Team Member",
+      "description": "Works on assigned tasks."
+    }
+  ],
+  "functionalRequirements": [
+    {
+      "title": "Authentication",
+      "description": "Users can register and sign in with email and password.",
+      "priority": "must",
+      "actorIds": [
+        "member"
+      ],
+      "acceptanceCriteria": [
+        "Users can register and sign in with email and password."
+      ],
+      "sourceReferences": [
+        {
+          "section": "4. Authentication",
+          "quote": "Users must register and sign in with email and password."
+        },
+        {
+          "section": "Authentication",
+          "quote": "Registration requires an email address."
+        },
+        {
+          "section": "Authentication",
+          "quote": "Registration requires a password."
+        },
+        {
+          "section": "Authentication",
+          "quote": "Registered users can sign in."
+        }
+      ],
+      "confidence": "High"
+    },
+    {
+      "title": "Project management",
+      "description": "Project Owners can create and rename projects.",
+      "priority": "must",
+      "actorIds": [
+        "owner"
+      ],
+      "acceptanceCriteria": [
+        "Project Owners can create and rename projects."
+      ],
+      "sourceReferences": [
+        {
+          "section": "Projects",
+          "quote": "Project Owners must be able to create and rename projects."
+        }
+      ],
+      "confidence": "High"
+    },
+    {
+      "title": "Task management",
+      "description": "Team Members can create tasks and update task status.",
+      "priority": "must",
+      "actorIds": [
+        "member"
+      ],
+      "acceptanceCriteria": [
+        "Team Members can create tasks and update task status."
+      ],
+      "sourceReferences": [
+        {
+          "section": "Tasks",
+          "quote": "Team Members must be able to create tasks and update task status."
+        }
+      ],
+      "confidence": "High"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "title": "Password protection",
+      "description": "Store passwords as salted hashes.",
+      "measurableTarget": null,
+      "sourceReferences": [
+        {
+          "section": "Security",
+          "quote": "Passwords must be stored as salted hashes."
+        }
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "category": "PERFORMANCE",
+      "title": "Task list latency",
+      "description": "Load task lists within the stated target.",
+      "measurableTarget": "500 ms for up to 100 tasks",
+      "sourceReferences": [
+        {
+          "section": "Performance",
+          "quote": "Task lists must load within 500 ms for up to 100 tasks."
+        }
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "title": "Failure diagnostics",
+      "description": "Unexpected failures should be logged with sufficient diagnostic context.",
+      "category": "OPERABILITY",
+      "measurableTarget": null,
+      "sourceReferences": [
+        {
+          "section": "Operational qualities",
+          "quote": "Unexpected failures should be logged with sufficient diagnostic context."
+        }
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "title": "Application readiness",
+      "description": "Health endpoints should allow infrastructure to determine whether the application is running and ready to serve requests.",
+      "category": "OPERABILITY",
+      "measurableTarget": null,
+      "sourceReferences": [
+        {
+          "section": "Operational qualities",
+          "quote": "Health endpoints should allow infrastructure to determine whether the application is running and ready to serve requests."
+        }
+      ],
+      "confidence": "HIGH"
+    }
+  ],
+  "constraints": [
+    {
+      "category": "Technology",
+      "description": "Use NestJS and PostgreSQL for the backend.",
+      "sourceReferences": [
+        {
+          "section": "Technical constraints",
+          "quote": "The backend must use NestJS and PostgreSQL."
+        }
+      ]
+    },
+    {
+      "category": "TECHNOLOGY",
+      "description": "The backend should use Node.js, TypeScript, NestJS, PostgreSQL and Prisma.",
+      "sourceReferences": [
+        {
+          "section": "Implementation boundaries",
+          "quote": "The backend should use Node.js, TypeScript, NestJS, PostgreSQL and Prisma."
+        }
+      ]
+    },
+    {
+      "category": "TECHNOLOGY",
+      "description": "The frontend should use React and TypeScript.",
+      "sourceReferences": [
+        {
+          "section": "Implementation boundaries",
+          "quote": "The frontend should use React and TypeScript."
+        }
+      ]
+    },
+    {
+      "category": "TECHNOLOGY",
+      "description": "The application must support Docker containerization.",
+      "sourceReferences": [
+        {
+          "section": "Implementation boundaries",
+          "quote": "The application must support Docker containerization."
+        }
+      ]
+    }
+  ],
+  "outOfScope": [
+    {
+      "description": "Mobile application for V1.",
+      "sourceReferences": [
+        {
+          "section": "Out of scope",
+          "quote": "A mobile application is out of scope for V1."
+        }
+      ]
+    }
+  ],
+  "openQuestions": [
+    {
+      "question": "How long should project invitations remain valid?",
+      "sourceReferences": [
+        {
+          "section": "Invitations",
+          "quote": "The invitation expiry duration is unspecified."
+        }
+      ]
+    }
+  ]
+}

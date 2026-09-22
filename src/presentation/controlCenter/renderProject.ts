@@ -1,3 +1,4 @@
+import { renderInventory } from './renderInventory';
 import { renderAnalysis } from './renderAnalysis';
 import type { PrdState } from '../../domain/document';
 import type { ProjectSource, ProjectState } from '../../domain/project';
@@ -15,7 +16,7 @@ export function renderProject(state: ProjectState, folderName?: string, modelRea
     case 'WORKSPACE_SELECTION_REQUIRED': title = 'Choose project folder'; description = 'Multiple workspace folders are open. Explicitly select the DevPilot project root.'; break;
     case 'NO_WORKSPACE': title = 'No workspace open'; description = 'Open a folder to start using DevPilot.'; break;
     case 'AI_NOT_READY': title = 'No project initialized'; description = 'Model configuration required. Project initialization is unavailable until a reasoning model is selected and available.'; break;
-    case 'NOT_INITIALIZED': title = 'No project initialized'; description = 'Initialize DevPilot to record how your project should be understood.'; break;
+    case 'NOT_INITIALIZED': title = 'No project initialized'; description = modelReady ? 'Initialize DevPilot to record how your project should be understood.' : 'Project initialization is unavailable until a reasoning model is selected and available.'; break;
     case 'LOADING': title = 'Checking project'; description = 'Reading workspace project state…'; break;
     case 'ERROR': title = 'Project unavailable'; description = state.message; break;
     case 'INITIALIZING':
@@ -35,10 +36,12 @@ export function renderProject(state: ProjectState, folderName?: string, modelRea
         details += renderPrd(prd, state.status === 'INITIALIZING' && state.manifest.project.source !== 'CODEBASE');
         if (state.analysis) details += renderAnalysis(state.analysis, modelReady && prd.status === 'SELECTED' && state.status === 'INITIALIZING' && state.manifest.project.source !== 'CODEBASE');
       }
+      if (state.inventory) details += renderInventory(state.inventory, state.status === 'INITIALIZING' && state.manifest.project.source !== 'PRD');
+      if (state.status === 'INITIALIZING' && state.inventory && state.inventory.status !== 'NOT_SCANNED') description = 'Project initialization is not complete. Review the available intelligence and scan coverage.';
       break;
     }
   }
-  return `<section class="card project" aria-labelledby="project-heading"><div class="card-heading">${tile('layers')}<div class="heading-copy"><h2 id="project-heading">Project</h2><h3>${escapeHtml(title)}</h3></div>${state.status === 'NOT_INITIALIZED' ? action('initialize', 'Initialize Project') : ''}</div>
+  return `<section class="card project" aria-labelledby="project-heading"><div class="card-heading">${tile('layers')}<div class="heading-copy"><h2 id="project-heading">Project</h2><h3>${escapeHtml(title)}</h3></div>${state.status === 'NOT_INITIALIZED' && modelReady ? action('initialize', 'Initialize Project') : ''}</div>
     <div class="card-description">${folderName ? `<p class="muted">Project folder: ${escapeHtml(folderName)}</p>` : ''}${details}<p class="muted">${escapeHtml(description)}</p>
     ${state.status !== 'NO_WORKSPACE' && state.status !== 'LOADING' ? `<div class="actions project-actions">${action('refreshProject', 'Refresh Project', true)}${action('selectWorkspace', 'Choose Project Folder', true)}</div>` : ''}</div></section>`;
 }

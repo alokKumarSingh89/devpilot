@@ -1,3 +1,5 @@
+import { parseAnalysisResponse } from '../src/application/analysis/parseAnalysisResponse';
+import { validateRawModelAnalysis } from '../src/domain/requirements/validateRawModelAnalysis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { VscodeLanguageModelGateway, VscodeModelDiscovery, WorkspaceModelSelectionStore } from '../src/infrastructure/models/vscodeModels';
@@ -218,4 +220,22 @@ describe('analysis transport limits and cancellation', () => {
     await vi.waitFor(() => expect(next).toHaveBeenCalledOnce()); token.cancel(); await rejection;
     expect(next).toHaveBeenCalledOnce(); expect(close).toHaveBeenCalledOnce(); expect(host.sources[0]?.dispose).toHaveBeenCalledOnce();
   });
+});
+
+it('collects split JSON in order and waits for stream completion before parsing', async () => {
+  let release: () => void = () => undefined;
+  const barrier = new Promise<void>((resolve) => { release = resolve; });
+  let yielded = false; let settled = false;
+  const available = { ...model(), maxInputTokens: 32000 };
+  available.sendRequest.mockResolvedValue({ text: (async function* () {
+    yield '{"product":{"name":';
+    yield '"DevTask","summary":"Task management"';
+    yielded = true; await barrier;
+    yield '},"actors":[],"functionalRequirements":[],"nonFunctionalRequirements":[],"constraints":[],"outOfScope":[],"openQuestions":[]}';
+  })() });
+  host.select.mockResolvedValue([available]);
+  const running = new VscodeLanguageModelGateway().sendRequest('chosen', 'prompt', cancellation(), analysisOptions).then((text) => { settled = true; return validateRawModelAnalysis(parseAnalysisResponse(text), 'Task management'); });
+  await vi.waitFor(() => expect(yielded).toBe(true)); expect(settled).toBe(false);
+  release(); expect((await running).product.name).toBe('DevTask');
+  expect(host.sources[0]?.dispose).toHaveBeenCalledOnce();
 });

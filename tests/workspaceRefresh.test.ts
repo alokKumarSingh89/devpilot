@@ -89,7 +89,7 @@ describe('workspace refresh through extension activation', () => {
     provider.resolveWebviewView(view);
     expect(webview.html).toContain('<li>actual-folder</li>');
     expect(webview.options.enableScripts).toBe(false);
-    expect(webview.options.enableCommandUris).toEqual(['devpilot.analyzePrd', 'devpilot.openRequirements', 'devpilot.openFolder', 'devpilot.refreshModels', 'devpilot.selectModel', 'devpilot.clearModel', 'devpilot.testModel', 'devpilot.initializeProject', 'devpilot.selectPrd', 'devpilot.refreshProject', 'devpilot.selectProjectWorkspace']);
+    expect(webview.options.enableCommandUris).toEqual(['devpilot.scanCodebase', 'devpilot.openRepositoryInventory', 'devpilot.analyzePrd', 'devpilot.openRequirements', 'devpilot.openFolder', 'devpilot.refreshModels', 'devpilot.selectModel', 'devpilot.clearModel', 'devpilot.testModel', 'devpilot.initializeProject', 'devpilot.selectPrd', 'devpilot.refreshProject', 'devpilot.selectProjectWorkspace']);
     expect(webview.html).toContain('Content-Security-Policy');
   });
 

@@ -1,3 +1,4 @@
+import type { InventoryState } from './repository/inventory';
 import type { AnalysisState } from './requirements/requirements';
 import type { PrdInput, PrdState } from './document';
 export const PROJECT_SCHEMA_VERSION = 1;
@@ -22,5 +23,5 @@ export interface ProjectManifest {
 
 export type ProjectState =
   | { readonly status: 'NO_WORKSPACE' | 'AI_NOT_READY' | 'NOT_INITIALIZED' | 'LOADING' | 'WORKSPACE_SELECTION_REQUIRED' }
-  | { readonly status: ProjectLifecycleStatus; readonly manifest: ProjectManifest; readonly prd?: PrdState; readonly analysis?: AnalysisState }
+  | { readonly status: ProjectLifecycleStatus; readonly manifest: ProjectManifest; readonly prd?: PrdState; readonly analysis?: AnalysisState; readonly inventory?: InventoryState }
   | { readonly status: 'ERROR'; readonly message: string };

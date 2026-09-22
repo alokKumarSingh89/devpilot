@@ -33,3 +33,11 @@ export function requirementsArtifact(): RequirementsArtifact {
     ...requirementsContent(),
   };
 }
+
+export function rawRequirementsContent() {
+  const content = requirementsContent();
+  const withoutId = <T extends { readonly id: string; readonly sourceReferences: readonly { section: string; evidence: string }[] }>(item: T) => { const { id: _id, sourceReferences, ...rest } = item; return { ...rest, sourceReferences: sourceReferences.map(({ section, evidence }) => ({ section, quote: evidence })) }; };
+  return { ...content, actors: content.actors.map((actor) => ({ key: actor.id, name: actor.name, description: actor.description })),
+    functionalRequirements: content.functionalRequirements.map(withoutId), nonFunctionalRequirements: content.nonFunctionalRequirements.map(withoutId),
+    constraints: content.constraints.map(withoutId), outOfScope: content.outOfScope.map(withoutId), openQuestions: content.openQuestions.map(withoutId) };
+}
