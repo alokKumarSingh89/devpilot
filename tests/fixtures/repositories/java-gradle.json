@@ -1,0 +1,11 @@
+{
+  "settings.gradle.kts": "rootProject.name = \"shop\"\ninclude(\":api\", \":worker\")",
+  "build.gradle.kts": "plugins { id(\"org.springframework.boot\") version \"3.0\" }\ndependencies {\n implementation(\"org.springframework.boot:spring-boot-starter-web\")\n implementation(\"org.hibernate.orm:hibernate-core\")\n runtimeOnly(\"org.postgresql:postgresql\")\n testImplementation(\"org.junit.jupiter:junit-jupiter\")\n}",
+  "api/build.gradle.kts": "plugins { kotlin(\"jvm\") }",
+  "worker/build.gradle.kts": "plugins { java }",
+  "api/src/main/kotlin/Main.kt": "DO_NOT_READ_SOURCE",
+  "worker/src/main/java/Main.java": "DO_NOT_READ_SOURCE",
+  "api/src/test/kotlin/ApiTest.kt": "DO_NOT_EXECUTE_TEST",
+  "Dockerfile": "DO_NOT_EXECUTE_CONTAINER",
+  ".github/workflows/ci.yml": "DO_NOT_EXECUTE_CI"
+}

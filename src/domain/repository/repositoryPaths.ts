@@ -1,5 +1,5 @@
 import { validateDocumentPath } from '../documentPath';
-export const REPOSITORY_EXCLUSIONS = ['.git', '.devpilot', 'node_modules', 'dist', 'build', 'coverage', '.next', '.nuxt', 'out', 'target', 'vendor', '__pycache__', '.venv', 'venv'] as const;
+export const REPOSITORY_EXCLUSIONS = ['.git', '.devpilot', 'node_modules', 'dist', 'build', 'coverage', '.next', '.nuxt', 'out', 'target', 'vendor', '__pycache__', '.venv', 'venv', '.gradle', '.dart_tool', '.pub-cache', 'pods', '.build', 'deriveddata', 'bin', 'obj'] as const;
 export const SECRET_GLOBS = ['**/.env', '**/.env.*', '**/*.pem', '**/*.key', '**/id_rsa', '**/id_ed25519'];
 export function ignoredRepositoryPath(path: string): boolean {
   try { validateDocumentPath(path); } catch { return true; }

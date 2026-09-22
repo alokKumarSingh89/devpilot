@@ -73,6 +73,14 @@ export function manifestSignals(path: string, text: string): ManifestSignals {
     if (spring) { frameworks.push('Spring Boot'); add('Spring Boot dependency/plugin coordinate'); kind = 'SERVICE'; }
     if (junit) { testing.push('JUnit'); add('JUnit dependency coordinate'); }
     buildTools.push(type === 'MAVEN' ? 'Maven' : 'Gradle');
+  } else if (type === 'WORKSPACE_CONFIG') {
+    const clean = text.replace(/^\s*(?:#|\/\/).*$/gm, '');
+    workspace = /(?:^|\/)settings\.gradle(?:\.kts)?$/.test(path) && /^\s*include\s*(?:\(|["'])/m.test(clean);
+    if (workspace) add('Gradle workspace declaration');
+  } else if (type === 'PHP_COMPOSER') { packageName = name(record(JSON.parse(text) as unknown).name);
+  } else if (type === 'DART_PACKAGE') { packageName = name(/^name\s*:\s*["']?([\w-]+)/m.exec(text)?.[1]);
+  } else if (type === 'DOTNET_PROJECT') { packageName = name(/<AssemblyName>\s*([^<]+)\s*<\/AssemblyName>/.exec(text)?.[1]);
+  } else if (type === 'SWIFT_PACKAGE') { packageName = name(/Package\s*\(\s*name\s*:\s*"([^"]+)"/.exec(text)?.[1]);
   } else if (type === 'GO_MODULE') { packageName = name(/^module\s+([^\s]+)\s*$/m.exec(text)?.[1]); buildTools.push('Go'); }
   else if (type === 'RUST_PACKAGE') {
     const block = /^\[package\]\s*$([\s\S]*?)(?=^\[|$(?![\s\S]))/m.exec(text)?.[1];

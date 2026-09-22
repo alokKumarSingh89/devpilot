@@ -1,3 +1,4 @@
+import { TECHNOLOGY_CATALOG, TECHNOLOGY_KINDS, PROJECT_KINDS, LANGUAGE_CATALOG, FRAMEWORK_CATALOG, type DetectedTechnology } from './technology';
 import { validateDocumentPath } from '../documentPath';
 import { ignoredRepositoryPath } from './repositoryPaths';
 import { InventoryFailure } from './InventoryFailure';
@@ -36,25 +37,40 @@ export function validateGitMetadata(value: unknown): GitMetadata {
 }
 export function validateInventory(value: unknown): Inventory {
   try {
-    const root = record(value, ['schemaVersion', 'generated', 'repository', 'languages', 'manifests', 'packages', 'frameworks', 'testing', 'tooling', 'git', 'importantFiles', 'statistics', 'scan']);
+    const root = record(value, ['schemaVersion', 'generated', 'repository', 'languages', 'manifests', 'packages', 'frameworks', 'testing', 'tooling', 'git', 'importantFiles', 'statistics', 'scan', ...(typeof value === 'object' && value !== null && 'technologies' in value ? ['technologies'] : [])]);
     if (root.schemaVersion !== 1) return invalid();
     const g = record(root.generated, ['generatedAt', 'projectId', 'repositoryFingerprint']);
     const generatedAt = text(g.generatedAt, 24); if (new Date(generatedAt).toISOString() !== generatedAt) return invalid();
     const projectId = text(g.projectId, 36); if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(projectId)) return invalid();
     const r = record(root.repository, ['workspaceName', 'type', 'evidence']);
-    const languages = list(root.languages, (item) => { const data = record(item, ['name', 'fileCount']); return { name: choice(data.name, LANGUAGES), fileCount: number(data.fileCount) }; }, LANGUAGES.length);
+    const languages = list(root.languages, (item) => {
+      const hasId = typeof item === 'object' && item !== null && 'id' in item;
+      const data = record(item, ['name', 'fileCount', ...(hasId ? ['id'] : [])]);
+      const name = choice(data.name, LANGUAGES); const definition = LANGUAGE_CATALOG.find((entry) => entry.name === name);
+      if (!definition || hasId && data.id !== definition.id) return invalid();
+      return { id: definition.id, name, fileCount: number(data.fileCount) };
+    }, LANGUAGES.length);
     const manifests = list(root.manifests, (item) => { const data = record(item, ['relativePath', 'type', 'contentHash']); return { relativePath: path(data.relativePath), type: choice(data.type, MANIFEST_TYPES), contentHash: data.contentHash === null ? null : hash(data.contentHash) }; });
     const packages = list(root.packages, (item) => {
       const data = record(item, ['id', 'name', 'relativePath', 'kind', 'manifestPath']);
       const id = text(data.id, 20); if (!/^PKG-[a-f0-9]{16}$/.test(id)) return invalid();
       const relativePath = data.relativePath === '.' ? '.' : path(data.relativePath); const manifestPath = path(data.manifestPath);
       if ((manifestPath.includes('/') ? manifestPath.slice(0, manifestPath.lastIndexOf('/')) : '.') !== relativePath) return invalid();
-      return { id, name: text(data.name, 160), relativePath, kind: choice(data.kind, ['APPLICATION', 'LIBRARY', 'SERVICE', 'PACKAGE', 'UNKNOWN'] as const), manifestPath };
+      return { id, name: text(data.name, 160), relativePath, kind: choice(data.kind, PROJECT_KINDS), manifestPath };
     }, 200);
-    const frameworks = list(root.frameworks, (item) => { const data = record(item, ['name', 'evidence']); const refs = evidence(data.evidence); if (!refs.length) return invalid(); return { name: choice(data.name, FRAMEWORKS), evidence: refs }; }, FRAMEWORKS.length);
+    const frameworks = list(root.frameworks, (item) => {
+      const rich = typeof item === 'object' && item !== null && ('id' in item || 'category' in item);
+      const data = record(item, ['name', 'evidence', ...(rich ? ['id', 'category'] : [])]);
+      const name = choice(data.name, FRAMEWORKS); const definition = FRAMEWORK_CATALOG.find((entry) => entry.name === name);
+      if (!definition || rich && (data.id !== definition.id || data.category !== definition.category)) return invalid();
+      const refs = evidence(data.evidence); if (!refs.length) return invalid();
+      return { id: definition.id, name, category: definition.category, evidence: refs };
+    }, FRAMEWORKS.length);
     const t = record(root.testing, ['frameworks', 'testFileCount']);
-    const tooling = record(root.tooling, ['packageManager', 'buildTools']); const pm = record(tooling.packageManager, ['name', 'conflict', 'evidence']);
+    const tooling = record(root.tooling, ['packageManager', 'buildTools', ...(typeof root.tooling === 'object' && root.tooling !== null && 'packageManagers' in root.tooling ? ['packageManagers'] : [])]); const pm = record(tooling.packageManager, ['name', 'conflict', 'evidence']);
     const pmName = choice(pm.name, PACKAGE_MANAGERS); const conflict = bool(pm.conflict); if (conflict && pmName !== 'UNKNOWN') return invalid();
+    const packageManagers = tooling.packageManagers === undefined ? (pmName === 'UNKNOWN' ? [] : [pmName]) : list(tooling.packageManagers, (item) => choice(item, PACKAGE_MANAGERS), PACKAGE_MANAGERS.length);
+    unique(packageManagers, (item) => item);
     const importantFiles = list(root.importantFiles, (item) => { const data = record(item, ['relativePath', 'reason']); return { relativePath: path(data.relativePath), reason: text(data.reason, 200) }; }, 300);
     const stats = record(root.statistics, ['discoveredFiles', 'consideredFiles', 'ignoredFiles']);
     const statistics = { discoveredFiles: number(stats.discoveredFiles), consideredFiles: number(stats.consideredFiles), ignoredFiles: number(stats.ignoredFiles) };
@@ -70,9 +86,22 @@ export function validateInventory(value: unknown): Inventory {
     const manifestPaths = new Set(manifests.map((item) => item.relativePath));
     const repositoryEvidence = evidence(r.evidence); const managerEvidence = evidence(pm.evidence);
     if ([...repositoryEvidence, ...managerEvidence, ...frameworks.flatMap((item) => item.evidence)].some((item) => !manifestPaths.has(item.relativePath)) || packages.some((item) => !manifestPaths.has(item.manifestPath))) return invalid();
+    const technologies: DetectedTechnology[] = root.technologies === undefined ? [] : list(root.technologies, (item) => {
+      const data = record(item, ['id', 'name', 'kind', 'evidence']);
+      const kind = choice(data.kind, TECHNOLOGY_KINDS); const id = text(data.id, 100); const name = text(data.name, 100);
+      if (!TECHNOLOGY_CATALOG.some((definition) => definition.id === id && definition.name === name && definition.kind === kind)) return invalid();
+      const refs = list(data.evidence, (entry) => {
+        const ref = record(entry, ['type', 'relativePath', 'value']); const relativePath = path(ref.relativePath);
+        if (!manifestPaths.has(relativePath)) return invalid();
+        return { type: choice(ref.type, ['DEPENDENCY', 'MANIFEST', 'CONFIGURATION'] as const), relativePath, value: text(ref.value, 200) };
+      }, 1000);
+      if (!refs.length) return invalid(); unique(refs, (ref) => JSON.stringify(ref));
+      return { id, name, kind, evidence: refs };
+    }, TECHNOLOGY_CATALOG.length);
+    unique(technologies, (item) => `${item.kind}:${item.id}`);
     return { schemaVersion: 1, generated: { generatedAt, projectId, repositoryFingerprint: hash(g.repositoryFingerprint) },
-      repository: { workspaceName: text(r.workspaceName, 160), type: choice(r.type, ['SINGLE_PACKAGE', 'MONOREPO', 'UNKNOWN'] as const), evidence: repositoryEvidence },
-      languages, manifests, packages, frameworks, testing, tooling: { packageManager: { name: pmName, conflict, evidence: managerEvidence }, buildTools }, git: validateGitMetadata(root.git), importantFiles, statistics,
+      repository: { workspaceName: text(r.workspaceName, 160), type: choice(r.type, ['SINGLE_PACKAGE', 'MONOREPO', 'MULTI_PROJECT', 'UNKNOWN'] as const), evidence: repositoryEvidence },
+      languages, manifests, packages, frameworks, testing, technologies, tooling: { packageManagers, packageManager: { name: pmName, conflict, evidence: managerEvidence }, buildTools }, git: validateGitMetadata(root.git), importantFiles, statistics,
       scan: { truncated, truncationReasons, limits } };
   } catch { throw new InventoryFailure('INVALID_INVENTORY'); }
 }

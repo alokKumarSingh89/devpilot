@@ -141,3 +141,13 @@ describe('read-only Git metadata adapter', () => {
     expect(await new VscodeGitMetadata().read(workspace)).toEqual({ available: false });
   });
 });
+
+it('reads only bounded ecosystem metadata, never ordinary source or runnable wrappers', async () => {
+  for (const path of ['Api.csproj', 'composer.json', 'Gemfile', 'Package.swift', 'pubspec.yaml', 'Pipfile', 'setup.py', 'settings.gradle.kts']) file(path, '{}');
+  for (const path of ['Program.cs', 'index.php', 'main.rb', 'App.swift', 'main.dart', 'gradlew', 'Cargo.lock', 'go.sum', 'schema.prisma']) file(path, 'DO_NOT_READ');
+  const result = await discovery.discover(workspace, token);
+  expect(result.files).toHaveLength(17);
+  const readPaths = host.fs.readFile.mock.calls.map((call) => call[0].path);
+  for (const path of ['Api.csproj', 'composer.json', 'Gemfile', 'Package.swift', 'pubspec.yaml', 'Pipfile', 'setup.py', 'settings.gradle.kts']) expect(readPaths).toContain(`/repo/${path}`);
+  for (const path of ['Program.cs', 'index.php', 'main.rb', 'App.swift', 'main.dart', 'gradlew', 'Cargo.lock', 'go.sum', 'schema.prisma']) expect(readPaths).not.toContain(`/repo/${path}`);
+});

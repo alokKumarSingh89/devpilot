@@ -24,7 +24,7 @@ describe('deterministic repository facts', () => {
     const files = { 'src/main.ts': '', 'src/App.tsx': '', 'script.cjs': '', 'app.py': '', 'Main.java': '', 'main.go': '', 'src/main.rs': '' };
     const first = build(files); const second = build(Object.fromEntries(Object.entries(files).reverse()));
     expect(first).toEqual(second);
-    expect(first.languages).toEqual([{ name: 'Go', fileCount: 1 }, { name: 'Java', fileCount: 1 }, { name: 'JavaScript', fileCount: 1 }, { name: 'Python', fileCount: 1 }, { name: 'Rust', fileCount: 1 }, { name: 'TypeScript', fileCount: 2 }]);
+    expect(first.languages).toEqual([{ id: 'go', name: 'Go', fileCount: 1 }, { id: 'java', name: 'Java', fileCount: 1 }, { id: 'javascript', name: 'JavaScript', fileCount: 1 }, { id: 'python', name: 'Python', fileCount: 1 }, { id: 'rust', name: 'Rust', fileCount: 1 }, { id: 'typescript', name: 'TypeScript', fileCount: 2 }]);
   });
   it.each([['package.json', 'NPM_PACKAGE'], ['pyproject.toml', 'PYTHON_PROJECT'], ['Dockerfile', 'DOCKER'], ['.github/workflows/build.yaml', 'CI_WORKFLOW'], ['go.mod', 'GO_MODULE'], ['Cargo.toml', 'RUST_PACKAGE'], ['build.gradle.kts', 'GRADLE']])('recognizes %s', (path, type) => expect(manifestType(path)).toBe(type));
   it.each([['package-lock.json', 'npm'], ['pnpm-lock.yaml', 'pnpm'], ['yarn.lock', 'yarn']])('detects package manager from %s', (path, manager) => expect(build({ [path]: '' }).tooling.packageManager.name).toBe(manager));
@@ -37,7 +37,7 @@ describe('deterministic repository facts', () => {
     expect(build(kind === 'workspaces' ? { 'package.json': '{"workspaces":["packages/*"]}' } : { 'pnpm-workspace.yaml': 'packages: [packages/*]' }).repository.type).toBe('MONOREPO');
   });
   it('does not infer monorepo from arbitrary nested example packages', () => {
-    expect(build({ 'package.json': '{}', 'examples/tutorial/package.json': '{}' }).repository.type).toBe('UNKNOWN');
+    expect(build({ 'package.json': '{}', 'examples/tutorial/package.json': '{}' }).repository.type).toBe('MULTI_PROJECT');
     expect(build({ 'package.json': '{}' }).repository.type).toBe('SINGLE_PACKAGE');
   });
   it('discovers NestJS, TypeScript tooling and test counts without copying scripts or contents', () => {

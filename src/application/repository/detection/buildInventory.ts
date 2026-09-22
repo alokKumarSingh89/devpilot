@@ -1,14 +1,14 @@
+import { projectStructure } from './projectStructure';
+import { LANGUAGE_CATALOG, FRAMEWORK_CATALOG } from '../../../domain/repository/technology';
+import { detectTechnologies } from './detectTechnologies';
+import { packageManagers } from './packageManagers';
 import { createHash } from 'node:crypto';
-import type { Inventory, GitMetadata, Evidence, TruncationReason } from '../../../domain/repository/inventory';
+import type { Inventory, GitMetadata, TruncationReason } from '../../../domain/repository/inventory';
 import { ignoredRepositoryPath } from '../../../domain/repository/repositoryPaths';
 import type { RepositorySnapshot } from '../ports';
 import { importantReason, isPackageManifest, isTestFile, language, manifestType } from './fileSignals';
 import { manifestSignals, type ManifestSignals } from './manifestSignals';
 const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
-const LOCKFILE_MANAGERS: Readonly<Record<string, Inventory['tooling']['packageManager']['name']>> = {
-  'package-lock.json': 'npm', 'pnpm-lock.yaml': 'pnpm', 'yarn.lock': 'yarn',
-  'bun.lock': 'bun', 'poetry.lock': 'poetry', 'uv.lock': 'uv',
-};
 const unique = <T extends string>(items: readonly T[]): T[] => [...new Set(items)].sort(compare);
 
 export function buildInventory(snapshot: RepositorySnapshot, git: GitMetadata, workspaceName: string, projectId: string, generatedAt: string): Inventory {
@@ -27,34 +27,29 @@ export function buildInventory(snapshot: RepositorySnapshot, git: GitMetadata, w
     }
     return { relativePath: file.relativePath, type: manifestType(file.relativePath) ?? 'TOOL_CONFIG', contentHash: metadata?.contentHash ?? null };
   });
+  const technologies = detectTechnologies(manifests.map((manifest) => {
+    const text = snapshot.metadata.get(manifest.relativePath)?.text;
+    return { path: manifest.relativePath, type: manifest.type, ...(text !== undefined ? { text } : {}) };
+  }), () => reasons.add('INVALID_METADATA'));
   const packageManifests = selectedManifests.filter((file) => isPackageManifest(file.relativePath));
   if (packageManifests.length > snapshot.limits.maxPackages) reasons.add('MAX_PACKAGE_COUNT');
   const packages: Inventory['packages'][number][] = packageManifests.slice(0, snapshot.limits.maxPackages).map(({ relativePath: path }) => {
     const root = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.';
     const data = signals.get(path);
-    return { id: `PKG-${createHash('sha256').update(path).digest('hex').slice(0, 16)}`, name: data?.name ?? (root === '.' ? workspaceName : root.split('/').pop() ?? root), relativePath: root, kind: data?.kind ?? 'UNKNOWN', manifestPath: path };
+    const detected = technologies.filter((item) => item.kind === 'FRAMEWORK' && item.evidence.some((ref) => ref.relativePath === path));
+    const inferredKind = detected.some((item) => ['FRONTEND', 'FULL_STACK', 'MOBILE', 'EXTENSION'].includes(FRAMEWORK_CATALOG.find((definition) => definition.id === item.id)?.category ?? '')) ? 'APPLICATION'
+      : detected.length ? 'SERVICE' : data?.kind ?? 'UNKNOWN';
+    return { id: `PKG-${createHash('sha256').update(path).digest('hex').slice(0, 16)}`, name: data?.name ?? (root === '.' ? workspaceName : root.split('/').pop() ?? root), relativePath: root, kind: inferredKind, manifestPath: path };
   });
-  const repositoryEvidence: Evidence[] = [];
-  for (const file of selectedManifests) {
-    if (['pnpm-workspace.yaml', 'turbo.json', 'nx.json'].includes(file.relativePath)) repositoryEvidence.push({ relativePath: file.relativePath, signal: 'root workspace configuration' });
-    if (signals.get(file.relativePath)?.workspace) repositoryEvidence.push({ relativePath: file.relativePath, signal: 'workspace declaration' });
-  }
-  const structuredPackages = packages.filter((item) => /^(apps|packages|services)\/[^/]+$/.test(item.relativePath));
-  if (structuredPackages.length >= 2) for (const item of structuredPackages) repositoryEvidence.push({ relativePath: item.manifestPath, signal: 'package under conventional apps/packages/services structure' });
-  const packageManagerEvidence: Evidence[] = [];
-  const managers: Inventory['tooling']['packageManager']['name'][] = [];
-  for (const file of selectedManifests) {
-    const lock = LOCKFILE_MANAGERS[file.relativePath.split('/').pop() ?? ''];
-    const declared = signals.get(file.relativePath)?.packageManager;
-    if (lock) { managers.push(lock); packageManagerEvidence.push({ relativePath: file.relativePath, signal: `lockfile ${lock}` }); }
-    if (declared) { managers.push(declared); packageManagerEvidence.push({ relativePath: file.relativePath, signal: `packageManager ${declared}` }); }
-  }
-  const distinctManagers = unique(managers);
-  const frameworks: Inventory['frameworks'][number][] = unique([...signals.values()].flatMap((signal) => signal.frameworks)).map((framework) => ({
-    name: framework, evidence: [...signals.entries()].filter(([, signal]) => signal.frameworks.includes(framework)).map(([path, signal]) => ({ relativePath: path, signal: signal.evidence.filter((e) => e.signal.startsWith('dependency') || e.signal.includes('declaration') || e.signal.includes('coordinate')).map((e) => e.signal).join('; ') })),
-  }));
-  const testing = [...signals.values()].flatMap((signal) => signal.testing);
-  const buildTools = [...signals.values()].flatMap((signal) => signal.buildTools);
+  const frameworks: Inventory['frameworks'][number][] = technologies.filter((item) => item.kind === 'FRAMEWORK').map((item) => ({
+    id: item.id, category: FRAMEWORK_CATALOG.find((definition) => definition.id === item.id)?.category ?? 'BACKEND',
+    name: item.name as Inventory['frameworks'][number]['name'],
+    evidence: item.evidence.map((ref) => ({ relativePath: ref.relativePath, signal: `${ref.type === 'DEPENDENCY' ? 'dependency' : 'declaration'} ${ref.value}` })),
+  })).sort((a, b) => compare(a.name, b.name));
+  const testing: Inventory['testing']['frameworks'][number][] = [];
+  testing.push(...technologies.filter((item) => item.kind === 'TEST_FRAMEWORK').map((item) => item.name as Inventory['testing']['frameworks'][number]));
+  const buildTools: Inventory['tooling']['buildTools'][number][] = [];
+  buildTools.push(...technologies.filter((item) => item.kind === 'BUILD_TOOL').map((item) => item.name as Inventory['tooling']['buildTools'][number]));
   for (const file of selectedManifests) {
     if (/(^|\/)vitest\.config\./.test(file.relativePath)) testing.push('Vitest');
     if (/(^|\/)jest\.config\./.test(file.relativePath)) testing.push('Jest');
@@ -63,18 +58,20 @@ export function buildInventory(snapshot: RepositorySnapshot, git: GitMetadata, w
     if (file.relativePath === 'turbo.json') buildTools.push('Turbo');
     if (file.relativePath === 'nx.json') buildTools.push('Nx');
   }
+
   const important = considered.flatMap((file) => { const reason = importantReason(file.relativePath); return reason ? [{ relativePath: file.relativePath, ...reason }] : []; }).sort((a, b) => b.score - a.score || compare(a.relativePath, b.relativePath));
   if (important.length > snapshot.limits.maxImportantFiles) reasons.add('MAX_IMPORTANT_FILES');
   const counts = new Map<NonNullable<ReturnType<typeof language>>, number>();
   for (const file of considered) { const name = language(file.relativePath); if (name) counts.set(name, (counts.get(name) ?? 0) + 1); }
   // No timestamp, Git dirty flag, absolute location or ordinary source contents enter this fingerprint.
-  const repositoryFingerprint = createHash('sha256').update(JSON.stringify({ version: 1, files: considered.map((file) => [file.relativePath, file.sizeBytes]), manifests, limits: snapshot.limits, reasons: unique([...reasons]), head: git.available ? git.headCommit : null })).digest('hex');
+  const repositoryFingerprint = createHash('sha256').update(JSON.stringify({ version: 2, files: considered.map((file) => [file.relativePath, file.sizeBytes]), manifests, limits: snapshot.limits, reasons: unique([...reasons]), head: git.available ? git.headCommit : null })).digest('hex');
   return {
     schemaVersion: 1, generated: { generatedAt, projectId, repositoryFingerprint },
-    repository: { workspaceName, type: repositoryEvidence.length ? 'MONOREPO' : packages.length === 1 ? 'SINGLE_PACKAGE' : 'UNKNOWN', evidence: repositoryEvidence },
-    languages: [...counts].sort(([a], [b]) => compare(a, b)).map(([name, fileCount]) => ({ name, fileCount })), manifests, packages, frameworks,
+    repository: { workspaceName, ...projectStructure(manifests, packages, signals) },
+    languages: [...counts].sort(([a], [b]) => compare(a, b)).map(([name, fileCount]) => ({ id: LANGUAGE_CATALOG.find((item) => item.name === name)?.id ?? name.toLowerCase(), name, fileCount })), manifests, packages, frameworks,
     testing: { frameworks: unique(testing), testFileCount: considered.filter((file) => isTestFile(file.relativePath)).length },
-    tooling: { packageManager: { name: distinctManagers.length === 1 ? distinctManagers[0] ?? 'UNKNOWN' : 'UNKNOWN', conflict: distinctManagers.length > 1, evidence: packageManagerEvidence }, buildTools: unique(buildTools) },
+    tooling: { ...packageManagers(technologies), buildTools: unique(buildTools) },
+    technologies,
     git, importantFiles: important.slice(0, snapshot.limits.maxImportantFiles).map(({ relativePath, reason }) => ({ relativePath, reason })),
     statistics: { discoveredFiles: snapshot.discoveredFiles, consideredFiles: considered.length, ignoredFiles: snapshot.ignoredFiles + snapshot.files.length - considered.length },
     scan: { truncated: reasons.size > 0, truncationReasons: unique([...reasons]), limits: snapshot.limits },
