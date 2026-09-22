@@ -23,11 +23,11 @@ All fields are required, including arrays that happen to be empty. Unknown field
 
 Priorities are `MUST`, `SHOULD`, `COULD`; confidence is `HIGH`, `MEDIUM`, `LOW`. Confidence describes support in the PRD, not predicted implementation success. NFR categories are `SECURITY`, `PERFORMANCE`, `RELIABILITY`, `SCALABILITY`, `USABILITY`, `OPERABILITY`, `MAINTAINABILITY`, `COMPLIANCE`, `OTHER`. Constraint categories are `TECHNOLOGY`, `BUSINESS`, `REGULATORY`, `RESOURCE`, `OTHER`.
 
-Every functional requirement has 1–20 acceptance criteria (each at most 1,000 characters). `actorIds` has at most 50 unique references to defined actors; it may be empty for behavior without a specified actor. `measurableTarget` is a nonempty string of at most 1,000 characters, or `null` when the PRD states no numeric/verifiable target. DevPilot does not invent a target to fill that field.
+Every functional requirement has 1–8 acceptance criteria (each at most 1,000 characters). `actorIds` has at most 50 unique references to defined actors; it may be empty for behavior without a specified actor. `measurableTarget` is a nonempty string of at most 1,000 characters, or `null` when the PRD states no numeric/verifiable target. DevPilot does not invent a target to fill that field.
 
 ## Traceability and identifiers
 
-Every requirement, constraint, out-of-scope item, and question needs 1–5 references. Each reference contains a nonempty `section` of at most 200 characters and nonempty `evidence` of at most **300 characters**. Oversized evidence is rejected, never truncated. On new analysis, every evidence excerpt must occur in the PRD after collapsing whitespace. Section labels may describe unheaded locations; their semantic accuracy still needs developer review. Loading a saved artifact validates structure and provenance fields without automatically requesting a model or re-analyzing source text.
+Every requirement, constraint, out-of-scope item, and question needs 1–3 references. Each reference contains a nonempty `section` of at most 200 characters and nonempty `evidence` of at most **300 characters**. Oversized evidence is rejected, never truncated. On new analysis, every evidence excerpt must occur in the PRD after collapsing whitespace. Section labels may describe unheaded locations; their semantic accuracy still needs developer review. Loading a saved artifact validates structure and provenance fields without automatically requesting a model or re-analyzing source text.
 
 The raw model contract (`RawModelRequirementsAnalysis`) has **no final IDs and no provenance metadata**. Actors use a nonempty local `key` (up to 100 characters); functional `actorIds` refer to these exact keys. Duplicate keys and dangling/duplicate references are rejected. All other content fields match the artifact table, excluding `id`, with one deliberate source-reference difference: raw references use `{section, quote}`; persisted references use `{section, evidence}`. The model cannot supply `schemaVersion`, generation time, project/model metadata or source paths/hashes.
 
@@ -94,7 +94,7 @@ Regression fixtures `tests/fixtures/devtask-prd.md` and `devtask-analysis.json` 
 
 The real-model diagnostic identified a nonmatching fourth source reference at `functionalRequirements[1].sourceReferences[3].evidence`; transport, complete stream collection and JSON parsing had succeeded. The model-facing name `evidence` left room for interpretation as a paraphrase. The supplied diagnostic proves a normalized text mismatch; without the quote itself it does not establish whether the specific difference was paraphrasing, sentence splicing or punctuation. No transport/token-budget change is part of this correction.
 
-Raw model references now require **`section` + `quote`**, consistently across functional requirements, NFRs, constraints, exclusions and questions. The shared schema and prompt use this contract. `description`/`question` hold interpretation; `quote` must be a short, contiguous, verbatim source excerpt. The prompt requests the smallest useful atomic quote, normally 1–3 materially supporting references, with the existing hard maximum of 5. Unsupported requirements must not be emitted; ambiguity can become a source-grounded question. No missing references are invented and no invalid reference is dropped to salvage an analysis.
+Raw model references now require **`section` + `quote`**, consistently across functional requirements, NFRs, constraints, exclusions and questions. The shared schema and prompt use this contract. `description`/`question` hold interpretation; `quote` must be a short, contiguous, verbatim source excerpt. The prompt requests the smallest useful atomic quote, preferably one materially supporting reference, with a hard maximum of 3. Unsupported requirements must not be emitted; ambiguity can become a source-grounded question. No missing references are invented and no invalid reference is dropped to salvage an analysis.
 
 `SourceTraceabilityVerifier` normalizes the PRD once, then verifies each candidate deterministically. It collapses consecutive JavaScript whitespace (including CRLF/LF, tabs and Markdown line-break spacing) into a single space and trims the ends. It performs a case-sensitive contiguous substring search. It does not change punctuation, list markers, meaningful words or synonyms; it has no fuzzy matching, embeddings or model dependency.
 
@@ -117,3 +117,40 @@ Allowed lists in the prose prompt, shared raw schema, canonical validator and Ty
 For a known NFR-only category used in constraints, diagnostics retain the exact field and expected values and add the constraint index and fixed operational keyword hints from at most 2,000 description characters. Only labels such as `logging` or `health/readiness` are emitted; no description, quote or credential preview is logged. These hints are diagnostic, not semantic classification. When the description contains no recognized terms the diagnostic says so. Unknown categories still fail normally. Lowercase valid categories normalize in their correct collection; invalid combinations never map to OTHER/TECHNOLOGY or move between collections.
 
 The representative DevTask fixture now includes failure logging and health readiness as OPERABILITY NFRs and backend/frontend/container technology boundaries as TECHNOLOGY constraints, with exact source quotes. All previous evidence, cancellation, persistence and model-gate protections remain in place.
+
+## Bounded model-output contract audit
+
+`analysisLimits.ts` is the authoritative domain contract: `TOP_LEVEL_LIMITS`, `ITEM_LIMITS` and `TEXT_LIMITS`. The raw schema, compact prompt schema, STRICT COLLECTION LIMITS prose and canonical validation derive from these constants. Canonical reconstruction does not reimplement array bounds. All six collections are required, even when empty. Counts below apply to each collection or item independently, not as a combined quota.
+
+| Field | Minimum | Maximum | Purpose and V1 assessment |
+| --- | ---: | ---: | --- |
+| actors | 0 | 200 | Existing generous defensive cap; normally far fewer roles |
+| functionalRequirements | 0 | 200 | Existing generous defensive cap; supports substantial ordinary PRDs |
+| nonFunctionalRequirements | 0 | 200 | Existing defensive cap; no artificial small quality quota |
+| constraints | 0 | 200 | Existing defensive cap |
+| outOfScope | 0 | 200 | Existing defensive cap |
+| openQuestions | 0 | 200 | Existing defensive cap; no invention to fill the array |
+| actorIds per functional requirement | 0 | 50 | Existing defensive cap allowing multi-role behavior; unique references to emitted keys, then remapped deterministically |
+| acceptanceCriteria per functional requirement | 1 | 8 | Semantic focus; prefer 2–5 concise testable criteria without near-duplicates; replaces 20 for new output |
+| sourceReferences per traced item | 1 | 3 | Semantic focus; prefer exactly 1, use 2 or 3 only for distinct necessary supporting statements; replaces 5 for new output |
+| quote / persisted evidence | nonempty | 300 characters | Existing excerpt/traceability protection; short atomic contiguous quotes |
+| section | nonempty | 200 characters | Existing navigation-label bound, not an exact heading match |
+| product/actor name; requirement title | nonempty | 160 characters | Existing readable-label bound |
+| requirement/actor/constraint/exclusion description | nonempty | 2,000 characters | Existing defensive verbosity cap, ample for a focused item |
+| open-question text | nonempty | 2,000 characters | Existing defensive verbosity cap |
+| product summary | nonempty | 3,000 characters | Existing defensive summary cap |
+| acceptance-criterion text | nonempty | 1,000 characters | Existing defensive per-criterion cap |
+| measurableTarget | nonempty or explicit null | 1,000 characters | Existing defensive cap; null means no stated target |
+| local actor key / canonical ID | nonempty | 100 characters | Existing identity/reference bound; canonical IDs remain DevPilot-owned |
+
+Every model-facing bound is present in the generated exact schema. Collection ranges also appear in the concise STRICT COLLECTION LIMITS section. Lengths count UTF-16 code units. Enum values derive from their established constants; normalization accepts casing changes only. Leading/trailing whitespace can be trimmed, but descriptions, criteria and quotes are never cut to fit a limit. Quotes still undergo deterministic source verification. Unknown actor references remain errors.
+
+Semantic limits encourage focused items; defensive caps protect against pathological output. They are not targets to fill. The prompt prohibits silently dropping supported requirements to fit capacity. Existing total response (262,144 characters), YAML (1 MiB), JSON nesting (32), input-token and PRD-reader protections also apply, so individual maxima are not a promise that every collection can simultaneously reach its maximum. Oversized responses/capacity violations fail explicitly; no chunking or automatic splitting is introduced.
+
+An array-bound diagnostic now includes `path`, `minimum`, `maximum`, `actualLength`, expected range, received length and a concise reason such as **Too many source references**. The reported six-reference constraint now fails at `constraints[0].sourceReferences` with minimum 1, maximum 3, actualLength 6. No prefix is kept and no reference is discarded. Over-limit references fail structure validation before quote verification; within-limit invalid quotes still fail provenance checks.
+
+Schema-v1 compatibility is deliberate: YAML **reads only** retain the old maxima of 5 source references and 20 criteria through named `LEGACY_ARTIFACT_LIMITS`. All new model outputs, canonicalization and writes enforce 3/8. Existing artifacts remain viewable/preservable without migration or truncation, while explicit re-analysis must satisfy the new contract. All other legacy artifact integrity checks remain unchanged.
+
+Prompt cleanup replaces repeated JSON schema boilerplate with a compact schema description generated from the same contract and removes repeated explanations. Measured with the same local DevTask fixture: fixed instructions plus empty data wrapper fell from 10,012 to 6,812 characters (32%); the complete fixture prompt fell from 11,263 to 8,063 characters. These are local measurements, not a claim about the user's larger real PRD. Trust boundaries, classification, exact quotes, enum/null rules and the tested JSON example remain.
+
+Boundary tests cover every traced collection at 0/1/3/4 references, criteria at 0/1/8/9, all six top-level caps, actor referential integrity at 50/51 links, every schema string bound, and read-only legacy compatibility. `oversized-analysis.json` is a fake complete response containing 201 actors, 9 criteria and 6 references; tests isolate each violation and assert exact diagnostics. The realistic DevTask fixture continues through the full pipeline.

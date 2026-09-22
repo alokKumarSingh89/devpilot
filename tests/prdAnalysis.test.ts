@@ -241,10 +241,10 @@ it('logs a distinct source-verification failure and preserves the previous artif
   const ctx = setup(); ctx.setSaved(requirementsArtifact());
   const raw = rawRequirementsContent();
   const valid = { section: 'Tasks', quote: 'Users must be able to create tasks with a title.' };
-  ctx.gateway.sendRequest.mockResolvedValue(JSON.stringify({ ...raw, functionalRequirements: raw.functionalRequirements.map((item, index) => index === 1 ? { ...item, sourceReferences: [valid, valid, valid, { section: 'Tasks', quote: 'Unsupported private paraphrase.' }] } : item) }));
+  ctx.gateway.sendRequest.mockResolvedValue(JSON.stringify({ ...raw, functionalRequirements: raw.functionalRequirements.map((item, index) => index === 1 ? { ...item, sourceReferences: [valid, valid, { section: 'Tasks', quote: 'Unsupported private paraphrase.' }] } : item) }));
   await expect(ctx.service.analyze(ctx.token)).rejects.toMatchObject({ code: 'INVALID_OUTPUT' });
   const logs = ctx.log.mock.calls.flat().join('\n');
-  for (const expected of ['source quote verification', 'functionalRequirements[1].sourceReferences[3].quote', 'quoteLength', 'normalizedQuoteLength', 'NOT_FOUND']) expect(logs).toContain(expected);
+  for (const expected of ['source quote verification', 'functionalRequirements[1].sourceReferences[2].quote', 'quoteLength', 'normalizedQuoteLength', 'NOT_FOUND']) expect(logs).toContain(expected);
   expect(logs).not.toContain('Unsupported private paraphrase');
   expect(logs).not.toContain('YAML persistence'); expect(ctx.storage.write).not.toHaveBeenCalled();
   expect(ctx.saved()).toEqual(requirementsArtifact());

@@ -1,5 +1,6 @@
 export const REQUIREMENTS_SCHEMA_VERSION = 1;
-export const MAX_EVIDENCE_LENGTH = 300;
+import { TEXT_LIMITS } from './analysisLimits';
+export const MAX_EVIDENCE_LENGTH = TEXT_LIMITS.quote;
 export const MAX_REQUIREMENTS_BYTES = 1024 * 1024;
 export const MAX_ANALYSIS_RESPONSE_CHARACTERS = 256 * 1024;
 export const PRIORITIES = ['MUST', 'SHOULD', 'COULD'] as const;

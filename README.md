@@ -291,3 +291,16 @@ The prompt now explicitly distinguishes observable behavior, quality attributes 
 5. If the model violates the contract again, retain the exact structured diagnostic (stage, field path, expected/received values and any fixed classification hints). An invalid output must leave the prior artifact unchanged. Do not delete `.devpilot` for this retest.
 
 A prompt improves model guidance but cannot guarantee classification compliance or semantic correctness. Automated tests validate the contract and representative fixtures; real-model compliance requires this live retest.
+
+
+### TASK-DP-005 bounded-output retest
+
+New analyses require **1–3 source references** per traced item (prefer 1), **1–8 acceptance criteria** per functional requirement, **0–50 actor links**, and **0–200 entries** in each top-level collection. Existing string bounds and quote verification remain. Limits come from one domain contract, and over-limit output fails without truncation. Existing schema-v1 artifacts remain readable under their original bounds. See the [complete bounds audit](docs/requirements-schema.md#bounded-model-output-contract-audit).
+
+1. Rebuild with `npm run compile`, restart **F5**, and keep the current initialized DevTask project, imported PRD and configured reasoning model. Re-import only if the PRD has changed.
+2. Open **View → Output → DevPilot**, then run **Analyze PRD** or **Re-analyze PRD**.
+3. Confirm transport, stream completion, JSON parsing, raw validation/normalization, quote verification, canonicalization, artifact validation and persistence complete.
+4. Open `.devpilot/product/requirements.yaml`; check references and criteria remain within their limits and every evidence excerpt matches the PRD after whitespace normalization.
+5. If the model violates a bound again, retain its structured diagnostic: exact path, minimum, maximum, actualLength and reason. For six constraint references, expect maximum 3 and actualLength 6. The previous valid artifact must remain unchanged.
+
+Live-provider compliance still requires this manual retest; automated fixtures cover deterministic boundary failures without model calls.

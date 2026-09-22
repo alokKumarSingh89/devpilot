@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { AnalysisValidationFailure, RAW_MODEL_REQUIREMENTS_CONTRACT } from '../src/domain/requirements/analysisContract';
 import { validateRawModelAnalysis } from '../src/domain/requirements/validateRawModelAnalysis';
 import { validateRequirementsArtifact } from '../src/domain/requirements/validateRequirements';
-import { compilePrdAnalysisPrompt } from '../src/application/analysis/compilePrdAnalysisPrompt';
+import { compilePrdAnalysisPrompt, describeAnalysisContract } from '../src/application/analysis/compilePrdAnalysisPrompt';
 import { canonicalizeRequirements } from '../src/application/analysis/canonicalizeRequirements';
 import { parseAnalysisResponse } from '../src/application/analysis/parseAnalysisResponse';
 import { requirementsArtifact } from './requirementsFixture';
@@ -40,7 +40,7 @@ describe('realistic model-content contract', () => {
   });
   it('uses the identical authoritative contract in the prompt and has no model-owned provenance/IDs', () => {
     const prompt = compilePrdAnalysisPrompt(prd);
-    expect(prompt).toContain(JSON.stringify(RAW_MODEL_REQUIREMENTS_CONTRACT));
+    expect(prompt).toContain(describeAnalysisContract(RAW_MODEL_REQUIREMENTS_CONTRACT));
     expect(prompt).toContain('There are NO optional fields'); expect(prompt).toContain('measurableTarget permits null');
     expect(raw()).not.toHaveProperty('generated'); expect(raw()).not.toHaveProperty('schemaVersion');
     expect(() => validateRawModelAnalysis({ ...raw(), generated: {} }, prd)).toThrow();
