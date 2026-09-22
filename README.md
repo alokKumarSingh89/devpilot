@@ -317,3 +317,22 @@ The prompt still asks for 1–3 references, preferably one. Raw output may conta
 5. If a run contains fabricated evidence, misplaced categories, missing semantics or exceeds a defensive capacity, expect a precise failure and unchanged previous artifact. Retain that structured diagnostic. Valid reference excess alone should succeed.
 
 Three repeatable full-pipeline runs are covered with a mocked response. Live VS Code provider testing cannot be performed in the headless test suite and remains the manual integration check.
+
+
+### TASK-DP-006 language-neutral inventory
+
+Repository inventory now supports extension-based detection for **TypeScript, JavaScript, Python, Java, Kotlin, C#, Go, Rust, Ruby, PHP, Swift, Dart, C and C++**. Ecosystem detectors recognize the corresponding manifests, package managers, framework dependencies, test/build signals and bounded database/ORM/infrastructure indicators. These are discovered facts, not technology recommendations or confirmed project choices. PRD-only projects never acquire a technology stack through inventory.
+
+The version-1 artifact adds stable language/framework IDs, framework categories, typed `technologies` with evidence, and plural `tooling.packageManagers`. Different ecosystem managers may coexist; incompatible manager signals in the same ecosystem/directory produce an explicit conflict. `MULTI_PROJECT` distinguishes independent projects from coordinated monorepos. Existing artifacts remain readable and can be explicitly rescanned to populate new fields. See [the inventory design and limitations](docs/repository-inventory.md#language-neutral-dp-006-extension).
+
+Manual verification on branch `feat/dp-006-repository-inventory`:
+
+1. Run `npm run typecheck`, `npm test`, `npm run compile`, then **F5 → Run DevPilot Extension**. Open DevPilot and initialize an Existing Codebase or PRD + Existing Code project in a disposable repository copy.
+2. Scan a Java/Kotlin Gradle project: inspect languages, Gradle, Spring Boot/Quarkus/Micronaut where declared, JUnit, and ORM/database driver evidence. No Gradle wrapper or build should execute.
+3. Scan .NET and Flutter repositories: check C#/NuGet/ASP.NET Core and Dart/pub/Flutter where declared; bin/obj/.dart_tool contents should not contribute counts.
+4. Scan a mixed Python/TypeScript repository: verify both manager names appear without a false cross-language conflict. Two incompatible JavaScript lockfiles in the same folder must report conflicting evidence.
+5. Open View Inventory and inspect typed evidence: all paths must be relative, with no full source contents, credentials or manifest script values. Check Prisma/SQLAlchemy/Hibernate only when their evidence exists.
+6. Rescan unchanged inputs; verify stable fingerprints. Add a source/config file, Refresh Project, and verify Stale before explicit rescan. Cancel a scan before commit and confirm the previous artifact remains intact.
+7. Open a PRD-only project, including one mentioning several technologies. Confirm no repository scan action or technology selection is inferred, and direct Scan Codebase is rejected.
+
+Live Extension Host and remote-filesystem checks remain manual. Initial detectors are intentionally bounded and do not evaluate dynamic build configuration or resolve transitive dependencies. No LLM, architecture generation, technology selection, coding agents or target-repository command execution is involved.

@@ -1,0 +1,7 @@
+{
+  "pubspec.yaml": "name: tiny_app\ndependencies:\n  flutter:\n    sdk: flutter\ndev_dependencies:\n  flutter_test:\n    sdk: flutter\n",
+  "pubspec.lock": "",
+  "lib/main.dart": "DO_NOT_READ_SOURCE",
+  "test/app_test.dart": "DO_NOT_EXECUTE_TEST",
+  ".dart_tool/generated.dart": "IGNORED"
+}

@@ -78,6 +78,7 @@ export class VscodeRepositoryDiscovery implements RepositoryDiscovery {
         check(token);
         if (isPackageManifest(file.relativePath) && ++packages > limits.maxPackages) { reasons.add('MAX_PACKAGE_COUNT'); continue; }
         // Lockfiles, workflow and Docker contents are never needed for these V1 signals.
+        if (file.relativePath.split('/').pop()?.toLowerCase() === 'gradlew') continue;
         const type = manifestType(file.relativePath);
         if (!inspectMetadata(file.relativePath) && !['TYPESCRIPT_CONFIG', 'WORKSPACE_CONFIG', 'TOOL_CONFIG'].includes(type ?? '')) continue;
         if (file.sizeBytes > limits.maxMetadataBytes || bytesRead + file.sizeBytes > MAX_TOTAL_METADATA_BYTES) { reasons.add('METADATA_SIZE_LIMIT'); continue; }

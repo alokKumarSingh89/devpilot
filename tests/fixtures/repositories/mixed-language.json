@@ -1,0 +1,12 @@
+{
+  "frontend/package.json": "{\"dependencies\":{\"react\":\"1\"}}",
+  "frontend/pnpm-lock.yaml": "",
+  "frontend/src/App.tsx": "",
+  "backend/pyproject.toml": "[tool.poetry]\nname = \"service\"\n[tool.poetry.dependencies]\npython = \"^3.12\"\nflask = \"*\"\nsqlalchemy = \"*\"\n[tool.poetry.group.dev.dependencies]\npytest = \"*\"",
+  "backend/poetry.lock": "",
+  "backend/app.py": "",
+  "backend/test_app.py": "",
+  "native/main.cpp": "",
+  "native/public.h": "",
+  "native/CMakeLists.txt": "DO_NOT_EXECUTE_CMAKE"
+}
