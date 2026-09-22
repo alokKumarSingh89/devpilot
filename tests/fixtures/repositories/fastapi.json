@@ -1,0 +1,7 @@
+{
+  "pyproject.toml": "[project]\nname = \"tiny-api\"\ndependencies = [\"fastapi>=0.100\"]\n[project.optional-dependencies]\ntest = [\"pytest>=8\"]\n",
+  "uv.lock": "version = 1",
+  "app/main.py": "source",
+  "tests/test_api.py": "source",
+  "tests/api_test.py": "source"
+}

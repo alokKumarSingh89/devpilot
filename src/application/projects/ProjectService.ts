@@ -1,3 +1,4 @@
+import type { RepositoryInventoryService } from '../repository/RepositoryInventoryService';
 import type { PrdAnalysisService } from '../analysis/PrdAnalysisService';
 import type { PrdStateService } from '../documents/PrdStateService';
 import type { ReasoningModel } from '../../domain/reasoningModel';
@@ -22,6 +23,7 @@ export class ProjectService {
     private readonly now: () => Date,
     private readonly prdState?: PrdStateService,
     private readonly analysis?: Pick<PrdAnalysisService, 'evaluate'>,
+    private readonly inventory?: Pick<RepositoryInventoryService, 'evaluate'>,
   ) {}
 
   onDidChange(listener: () => void): { dispose(): void } {
@@ -44,8 +46,9 @@ export class ProjectService {
       state = manifest ? {
         status: manifest.project.status, manifest,
         ...(this.prdState ? { prd: await this.prdState.evaluate(workspace, manifest.inputs?.prd) } : {}),
+        ...(this.inventory && manifest.project.source !== 'PRD' ? { inventory: await this.inventory.evaluate(workspace, manifest) } : {}),
         ...(this.analysis && manifest.project.source !== 'CODEBASE' ? { analysis: await this.analysis.evaluate(workspace, manifest) } : {}),
-      } : { status: this.models.state.status === 'READY' ? 'NOT_INITIALIZED' : 'AI_NOT_READY' };
+      } : { status: 'NOT_INITIALIZED' };
     } catch (error) {
       state = { status: 'ERROR', message: error instanceof ProjectFailure ? error.message : new ProjectFailure('READ_FAILED').message };
     }

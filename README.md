@@ -2,13 +2,13 @@
 
 DevPilot is an AI Engineering Control Plane for VS Code. Its long-term direction is to understand PRDs and repositories, maintain structured project intelligence, plan engineering tasks, orchestrate coding agents, independently review and validate their work, and support manual development.
 
-## Current scope: TASK-DP-001 through TASK-DP-005
+## Current scope: TASK-DP-001 through TASK-DP-006
 
 This foundation registers a dedicated DevPilot Activity Bar container and the `devpilot.controlCenter` Webview View. The view displays the product name, “AI Engineering Control Plane”, a Workspace section listing current workspace folder names (or “No workspace open”), and “No project initialized”. The command **DevPilot: Open Control Center** (`devpilot.openControlCenter`) reveals the view.
 
 TASK-DP-002 adds a reasoning-model gateway using the stable VS Code Language Model API. A reasoning model is **not a coding agent**. PRD analysis is implemented in TASK-DP-005; planning, architecture, review, and validation remain future scope.
 
-TASK-DP-003 adds project initialization and validated persistence in `.devpilot/project.yaml`. TASK-DP-004 adds explicit PRD discovery, safe text import, and portable source metadata. TASK-DP-005 adds explicitly requested AI PRD analysis and validated structured requirements. There is no repository analysis, task planning, agent integration, Git automation, backend, or React dependency. Test Model sends only a fixed readiness prompt, never workspace files. Only the selected model ID is persisted in VS Code workspace state (`devpilot.reasoningModelId`); model objects and responses are not persisted.
+TASK-DP-003 adds project initialization and validated persistence in `.devpilot/project.yaml`. TASK-DP-004 adds explicit PRD discovery, safe text import, and portable source metadata. TASK-DP-005 adds explicitly requested AI PRD analysis and validated structured requirements. TASK-DP-006 adds explicit deterministic repository inventory without model calls. There is no AI repository analysis, task planning, agent integration, Git automation, backend, or React dependency. Test Model sends only a fixed readiness prompt, never workspace files. Only the selected model ID is persisted in VS Code workspace state (`devpilot.reasoningModelId`); model objects and responses are not persisted.
 
 ## Development
 
@@ -86,7 +86,7 @@ Use **DevPilot: Initialize Project** or its Control Center action. A workspace f
 
 The source picker offers **Import PRD**, **Analyze Existing Code**, and **PRD + Existing Code** (recommended for an existing project with requirements). These choices only set the source field. Cancelling writes nothing. No document is requested, scanned, read, or analyzed, and no model request is sent by initialization.
 
-New projects always have lifecycle `INITIALIZING`. `READY` is supported when reading a valid manifest but is never produced by this initialization workflow. Existing manifests take precedence over AI configuration when displaying project identity, so clearing a model never makes an existing project appear uninitialized. Without a manifest, states resolve to `NO_WORKSPACE`, `AI_NOT_READY`, or `NOT_INITIALIZED`. The UI also handles loading and storage/validation errors without enabling initialization during an error.
+New projects always have lifecycle `INITIALIZING`. `READY` is supported when reading a valid manifest but is never produced by this initialization workflow. Existing manifests take precedence over AI configuration when displaying project identity, so clearing a model never makes an existing project appear uninitialized. Without a workspace, state is `NO_WORKSPACE`; a missing manifest resolves to `NOT_INITIALIZED` independently of model readiness. Initialization remains gated by the selected model. The UI also handles loading and storage/validation errors without enabling initialization during an error.
 
 ### Manifest V1
 
@@ -221,6 +221,73 @@ Run `npm run typecheck`, `npm test`, and `npm run compile`. Press **F5 → Run D
 8. **Cancellation:** Start re-analysis, then cancel in the progress notification while the provider is responding. Expect a cancellation notice, no partial YAML and unchanged previous requirements. If no artifact existed, state returns to **Not analyzed**. Cancellation after the final rename begins cannot undo that completed commit.
 9. **Malformed output:** Run `npm test -- tests/requirementsValidation.test.ts tests/prdAnalysis.test.ts tests/requirementsStorage.test.ts`. These fake-provider tests inject malformed JSON, invalid schemas, fabricated/oversized evidence and failed writes; they assert that existing valid requirements remain intact. No AI quota is used by tests.
 
-Also verify light/dark/high-contrast themes and a narrow sidebar; model metadata, paths and error text must render literally. CODEBASE-only projects, missing PRDs, no selected reasoning model and untrusted workspaces must reject direct analysis commands. No architecture generation, codebase analysis, task planning, coding-agent integration, Git automation, or autonomous work is included.
+Also verify light/dark/high-contrast themes and a narrow sidebar; model metadata, paths and error text must render literally. CODEBASE-only projects, missing PRDs, no selected reasoning model and untrusted workspaces must reject direct analysis commands. No architecture generation, AI codebase analysis, task planning, coding-agent integration, Git automation, or autonomous work is included.
 
 Live model quality, quota/consent, remote filesystem behavior and Extension Host UI require manual verification. The test fixture at `tests/fixtures/requirements-prd.md` is intentionally small; it is not a replacement for reviewing the full DevTask PRD output. IDs are stable for identical normalized semantic identities, but arbitrary rewording across runs requires future reconciliation. Prompt defenses and structural validation cannot establish semantic correctness by themselves.
+
+
+## Deterministic repository inventory (TASK-DP-006)
+
+Initialize an **Existing Codebase** or **PRD + Existing Code** project, then click **Scan Codebase**. This explicit, cancellable operation creates `.devpilot/codebase/inventory.yaml`. It inventories bounded repository facts; it never calls a reasoning model, executes target scripts, installs dependencies, runs target tests/builds, or starts containers. Existing initialization still requires AI Ready; scanning an already initialized project does not require a selected model. PRD-only projects cannot scan through the command layer.
+
+The Control Center shows **Codebase intelligence** with Not scanned, Scanning, Scanned, Stale or Scan failed, repository type, languages/frameworks, package/test counts, Git metadata and incomplete-coverage warnings. **View Inventory** opens the validated artifact. **Rescan Codebase** replaces it only after successful validation. **Refresh Project** explicitly checks its fingerprint without replacing the artifact. Normal view refreshes, reloads and file watchers only load saved inventory; there is no automatic repository scan. After reload, the UI explains that saved inventory needs an explicit freshness check. Project lifecycle remains **Initializing**, and `project.yaml` is unchanged.
+
+See [Repository inventory V1](docs/repository-inventory.md) for schema, bounds, detector evidence, secret handling, fingerprint inputs and filesystem limitations. The new commands are `devpilot.scanCodebase` and `devpilot.openRepositoryInventory`. Resource-scoped `devpilot.inventory.*` settings control the five scan limits. No dependencies were added.
+
+### TASK-DP-006 manual acceptance
+
+Run the development validation commands above, then press **F5 → Run DevPilot Extension**. In the Extension Development Host, open **DevPilot: Open Control Center**, select a reasoning model and initialize with **Existing Codebase** (or **PRD + Existing Code**). In a multi-root workspace explicitly select the intended project folder. Initialization itself must not scan. Use disposable copies for cases involving new files. These checks require a live Extension Host; fixture tests do not replace them.
+
+1. **DevPilot itself:** Open a copy of DevPilot in the host, initialize it, and click **Scan Codebase → View Inventory**. Expect TypeScript, npm, VS Code Extension, esbuild and Vitest signals. Check relative paths, schema version 1, a SHA-256 fingerprint and `project.yaml` still `INITIALIZING`. Clearing the selected model after initialization must not block a rescan.
+2. **NestJS:** Open a small existing NestJS project, initialize and scan. Expect TypeScript, NestJS with `@nestjs/core` evidence, package/TypeScript manifests and tests where present. No package scripts should run. The automated fixture is `tests/fixtures/repositories/nestjs.json`.
+3. **Monorepo:** Open a small existing workspace repository with workspace declarations and multiple apps/packages. Initialize and scan; expect MONOREPO, individual package paths and explicit workspace/structural evidence. The automated fixture is `tests/fixtures/repositories/monorepo.json`.
+4. **Excluded directories:** In a disposable initialized repository containing `node_modules`, `dist`, `build` or `coverage`, scan and inspect YAML. None of their paths may appear or contribute language/test counts. In DevPilot itself, existing dependencies and `dist` provide this check without running any target command.
+5. **Secrets:** In the disposable repository add `.env`, `.env.local` and a `.key` file containing a distinctive dummy marker. Rescan. Neither these paths nor the marker may appear in inventory. Use dummy data, not actual credentials.
+6. **Stable fingerprint:** Save `generated.repositoryFingerprint`, rescan without editing files or changing Git HEAD/settings, and compare. The hash must match even though `generatedAt` changes. `.devpilot` writes must not invalidate it. Run **Refresh Project**; expect Scanned.
+7. **Staleness:** Add and save a candidate such as `src/main.ts` or a new `tsconfig.extra.json` in the disposable repository. Run **Refresh Project**; expect Stale while the saved artifact remains unchanged. Click **Rescan Codebase**; expect Scanned and a different fingerprint. No automatic polling or model call should occur.
+8. **Cancellation:** Save a copy of a valid inventory. Start **Rescan Codebase**, then click **Cancel** in its progress notification before completion. Verify the previous artifact is unchanged and no partial inventory replaced it. A larger repository or slower remote filesystem makes this easier to observe; small scans may finish before cancellation. Automated tests cover stalled discovery and cancellation before commit deterministically.
+
+Also scan a Python/FastAPI project (fixture: `tests/fixtures/repositories/fastapi.json`); check FastAPI/Pytest evidence and Python counts. Lower `devpilot.inventory.maxFiles` temporarily to exercise the incomplete-coverage warning, then restore it. In PRD + Existing Code, previously analyzed requirements must remain visible alongside the inventory. Verify untrusted workspaces and PRD-only projects reject direct scan commands, unavailable Git still permits scanning, and themes/narrow sidebars preserve readable escaped labels.
+
+
+### TASK-DP-005 real-model integration retest
+
+The hardening fix separates raw model content from final IDs/provenance and records safe stage/path diagnostics in **DevPilot Output**. See [the analysis contract and diagnostics](docs/requirements-schema.md). Historical failures cannot be attributed to an exact response field without the original response or diagnostics; the old generic error concealed that information. Tests reproduce ID-contract brittleness, strict enum/null behavior and misleading first-analysis artifact claims. Existing stream collection already waited for completion; a new split-JSON regression verifies it.
+
+1. Run `npm run typecheck`, `npm test`, `npm run compile`, then **F5 → Run DevPilot Extension**. Open the intended PRD workspace and DevPilot. Use a disposable workspace copy or back up `.devpilot` before this destructive reset test.
+2. **A–B:** Delete `.devpilot` in the Extension Development Host Explorer. Click **Refresh Project** (or **Developer: Reload Window**, then reopen DevPilot). Expect **No project initialized**, with no recreation of metadata. If no model is selected, select one to enable initialization.
+3. **C–D:** Click **Initialize Project** and choose **Import PRD** or **PRD + Existing Code**. Confirm project status is **Initializing**. In multi-root workspaces select the intended root explicitly.
+4. **E:** Click **Select PRD** and explicitly import the saved `PRD.md`. Expect **Selected**.
+5. **F–G:** Open **View → Output**, select **DevPilot**, then click **Analyze PRD**. Accept provider access if prompted. Observe request metadata, token headroom, stream completion, response size and validation stages. No full PRD or model response should appear in logs. On rejection, inspect the exact stage/path/expected/received diagnostic.
+6. **H–I:** On success, click **View Requirements**. Verify `.devpilot/product/requirements.yaml` exists, has schema 1, locally generated IDs and actual model/source metadata. Review actors, requirements, NFRs, constraints, exclusions, questions and source evidence against your full DevTask PRD. The project must remain **Initializing**.
+7. **J:** Click **Re-analyze PRD**. A successful result replaces the complete artifact. A failed result must leave the previous artifact intact and report preservation; a failed first analysis after deletion must instead report that no artifact was created. Cancel a running analysis before commit and verify no partial replacement.
+8. **K–L:** Edit and save `PRD.md`, then **Refresh Project**. Expect **Changed** and no enabled analysis action. Invoke **DevPilot: Analyze PRD** directly; expect a re-import instruction and unchanged requirements. Explicitly re-import, then analyze again.
+
+Live provider output, quota/consent and Extension Host behavior still require this manual retest. Automated tests use mocked editor/provider boundaries and do not contact a model.
+
+
+### TASK-DP-005 source-quote retest
+
+Raw model `sourceReferences` now require `{section, quote}`. DevPilot independently verifies each short quote using contiguous source matching after whitespace normalization, then writes the verified excerpt as schema-v1 `evidence`. Descriptions may paraphrase; quotes may not. See [source traceability rules](docs/requirements-schema.md#source-traceability-correction).
+
+1. Rebuild with `npm run compile`, restart **F5 → Run DevPilot Extension**, and keep the existing initialized project and selected reasoning model. Do not delete `.devpilot` for this retest.
+2. Open DevPilot and **Refresh Project**. If `PRD.md` is **Changed**, explicitly re-import it; otherwise keep the current import.
+3. Open **View → Output → DevPilot** and click **Analyze PRD** (or **Re-analyze PRD** when an artifact already exists), using the real configured VS Code model.
+4. Confirm diagnostics progress through stream completion, JSON parsing, raw validation, **source quote verification**, **source quotes verified**, canonicalization, final artifact validation and YAML persistence. A rejected quote must produce its `.quote` field path, lengths and `NOT_FOUND`; it must not publish a partial artifact.
+5. Click **View Requirements** to open `.devpilot/product/requirements.yaml`. Inspect source references across functional requirements, NFRs, constraints, exclusions and questions. Each persisted `evidence` must occur in the saved PRD after collapsing whitespace. Schema stays 1, with `evidence`, not `quote`, in the artifact.
+6. Run **Re-analyze PRD** again and review the new result. A model can still violate the contract; if it does, the verifier must reject it and preserve the previous artifact. The fix does not guarantee compliance from every model response.
+
+The automated suite includes the representative DevTask complete pipeline and the exact fourth-reference failure shape. Live provider compliance and Extension Host behavior require this manual retest.
+
+
+### TASK-DP-005 classification retest
+
+The prompt now explicitly distinguishes observable behavior, quality attributes and implementation restrictions, and contains a tested JSON example. `OPERABILITY` remains valid only for NFRs. Invalid constraint categories are rejected rather than remapped or moved.
+
+1. Run `npm run compile`, restart **F5**, and open the current initialized workspace. Keep the same imported PRD; re-import only if its saved content has changed.
+2. Open **View → Output → DevPilot**, then run **Analyze PRD** or **Re-analyze PRD** with the configured model.
+3. Verify transport → complete stream → parsing → raw validation/normalization → quote verification → canonicalization → final validation → YAML persistence.
+4. Open `.devpilot/product/requirements.yaml`. Check that logging and health-readiness qualities appear under NFRs with OPERABILITY, and mandated backend/frontend/database/container technologies appear as TECHNOLOGY constraints, supported by verified source evidence.
+5. If the model violates the contract again, retain the exact structured diagnostic (stage, field path, expected/received values and any fixed classification hints). An invalid output must leave the prior artifact unchanged. Do not delete `.devpilot` for this retest.
+
+A prompt improves model guidance but cannot guarantee classification compliance or semantic correctness. Automated tests validate the contract and representative fixtures; real-model compliance requires this live retest.

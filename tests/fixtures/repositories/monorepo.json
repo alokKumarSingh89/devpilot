@@ -1,0 +1,9 @@
+{
+  "package.json": "{\"name\":\"workspace\",\"workspaces\":[\"apps/*\",\"packages/*\"]}",
+  "pnpm-workspace.yaml": "packages: [apps/*, packages/*]",
+  "pnpm-lock.yaml": "lockfileVersion: 9",
+  "apps/web/package.json": "{\"name\":\"web\",\"dependencies\":{\"react\":\"1\",\"next\":\"1\"}}",
+  "apps/web/src/App.tsx": "source",
+  "packages/utils/package.json": "{\"name\":\"utils\",\"main\":\"index.js\"}",
+  "packages/utils/index.js": "source"
+}

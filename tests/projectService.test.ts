@@ -29,7 +29,7 @@ function setup() {
     service: new ProjectService(workspace, models, storage, randomUUID, () => new Date('2026-09-21T10:00:00.000Z')),
     storage, workspace, models,
     changeWorkspace: (value: ProjectWorkspace | undefined) => { current = value; },
-    setManifest: (value: ProjectManifest) => { manifest = value; },
+    setManifest: (value: ProjectManifest | undefined) => { manifest = value; },
   };
 }
 
@@ -97,11 +97,12 @@ describe('project state', () => {
     const ctx = setup(); ctx.changeWorkspace(undefined); await ctx.service.refresh();
     expect(ctx.service.state.status).toBe('NO_WORKSPACE');
   });
-  it.each(['NO_MODEL', 'SELECTION_REQUIRED'] as const)('resolves AI_NOT_READY for %s', async (status) => {
+  it.each(['NO_MODEL', 'SELECTION_REQUIRED'] as const)('keeps missing-project identity separate from model gate %s', async (status) => {
     const ctx = setup(); ctx.models.state = { status, models: [] }; await ctx.service.refresh();
-    expect(ctx.service.state.status).toBe('AI_NOT_READY');
+    expect(ctx.service.state.status).toBe('NOT_INITIALIZED');
+    expect(renderProject(ctx.service.state, undefined, false)).not.toContain('command:devpilot.initializeProject');
   });
-  it('resolves NOT_INITIALIZED only when the manifest is absent and AI is ready', async () => {
+  it('resolves NOT_INITIALIZED when the manifest is absent', async () => {
     const ctx = setup(); await ctx.service.refresh(); expect(ctx.service.state.status).toBe('NOT_INITIALIZED');
   });
   it.each(['INITIALIZING', 'READY'] as const)('restores %s from a valid manifest, even when AI is unselected', async (status) => {
@@ -150,4 +151,17 @@ it('escapes loaded project names and displays the initializing lifecycle', () =>
   expect(html).not.toContain('<script>');
   expect(html).toContain('Initializing');
   expect(html).toContain('Project intelligence has not yet been generated');
+});
+
+it('external project deletion clears stale state without recreating metadata, and explicit initialization resumes', async () => {
+  const ctx = setup(); ctx.setManifest(projectFixture()); await ctx.service.refresh();
+  expect(ctx.service.state.status).toBe('INITIALIZING');
+  ctx.setManifest(undefined); ctx.models.state = { status: 'NO_MODEL', models: [] };
+  await ctx.service.refresh();
+  expect(ctx.service.state).toEqual({ status: 'NOT_INITIALIZED' });
+  expect(ctx.storage.write).not.toHaveBeenCalled();
+  ctx.models.state = { status: 'READY', models: [selected], selected };
+  await ctx.service.initialize('PRD');
+  expect(ctx.service.state.status).toBe('INITIALIZING');
+  expect(ctx.storage.write).toHaveBeenCalledOnce();
 });

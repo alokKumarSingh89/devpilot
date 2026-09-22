@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { PrdImportService } from '../../application/documents/PrdImportService';
 import type { ProjectService } from '../../application/projects/ProjectService';
 import { DocumentFailure } from '../../domain/DocumentFailure';
+import { InventoryFailure } from '../../domain/repository/InventoryFailure';
 import { ProjectFailure } from '../../domain/ProjectFailure';
 import { relativeDocumentPath } from '../../infrastructure/documents/workspaceDocumentPath';
 
@@ -10,12 +11,14 @@ type DocumentChoice = vscode.QuickPickItem & ({ readonly action: 'browse' } | { 
 export function registerPrdCommands(
   prds: PrdImportService, projects: ProjectService,
   chooseWorkspace: (force?: boolean) => Promise<boolean>, log: (message: string) => void,
+  refreshInventory: () => Promise<void> = async () => undefined,
 ): vscode.Disposable[] {
   const run = async (operation: () => Promise<void>): Promise<void> => {
     try { await operation(); }
     catch (error) {
-      const failure = error instanceof ProjectFailure || error instanceof DocumentFailure ? error : new DocumentFailure('READ_FAILED');
-      log(`PRD: ${failure.code}`);
+      const failure = error instanceof ProjectFailure || error instanceof DocumentFailure || error instanceof InventoryFailure ? error : new DocumentFailure('READ_FAILED');
+      log(`Project input: ${failure.code}`);
+      if (failure instanceof InventoryFailure && failure.code === 'CANCELLED') { await vscode.window.showInformationMessage(failure.message); return; }
       await vscode.window.showWarningMessage(failure.message);
     }
   };
@@ -49,7 +52,9 @@ export function registerPrdCommands(
       await vscode.window.showInformationMessage('PRD imported. The project remains Initializing; no AI analysis was triggered by this import.');
     })),
     vscode.commands.registerCommand('devpilot.refreshProject', () => run(async () => {
-      if (await chooseWorkspace()) await projects.refresh();
+      if (await chooseWorkspace()) {
+        try { await refreshInventory(); } finally { await projects.refresh(); }
+      }
     })),
     vscode.commands.registerCommand('devpilot.selectProjectWorkspace', () => run(async () => {
       if (await chooseWorkspace(true)) await projects.refresh();

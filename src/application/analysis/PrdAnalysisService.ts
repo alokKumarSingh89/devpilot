@@ -1,9 +1,12 @@
+import { AnalysisValidationFailure } from '../../domain/requirements/analysisContract';
+import { validateRawModelStructure, verifyModelSourceReferences } from '../../domain/requirements/validateRawModelAnalysis';
+import { analysisDiagnostic } from './analysisDiagnostics';
 import { DocumentFailure } from '../../domain/DocumentFailure';
 import { ProjectFailure } from '../../domain/ProjectFailure';
 import type { ProjectManifest } from '../../domain/project';
 import { AnalysisFailure } from '../../domain/requirements/AnalysisFailure';
 import { MAX_ANALYSIS_RESPONSE_CHARACTERS, type AnalysisState } from '../../domain/requirements/requirements';
-import { validateRequirementsArtifact, validateRequirementsContent } from '../../domain/requirements/validateRequirements';
+import { validateRequirementsArtifact } from '../../domain/requirements/validateRequirements';
 import type { DocumentReader } from '../documents/ports';
 import { checkCancellation, ModelFailure } from '../models/ModelFailure';
 import type { ReasoningModelService } from '../models/ReasoningModelService';
@@ -31,6 +34,7 @@ export class PrdAnalysisService {
     private readonly gateway: LanguageModelGateway,
     private readonly requirements: RequirementsStorage,
     private readonly now: () => Date,
+    private readonly log: (message: string) => void = () => undefined,
   ) {}
   onDidChange(listener: () => void): { dispose(): void } {
     this.listeners.add(listener);
@@ -83,6 +87,9 @@ export class PrdAnalysisService {
     this.failures.delete(workspace.key);
     this.notify();
     let snapshot: ProjectManifest | undefined;
+    let stage = 'preflight';
+    let requested = false;
+    analysisDiagnostic(this.log, 'started');
     try {
       checkCancellation(token);
       const source = await this.source(workspace);
@@ -95,11 +102,24 @@ export class PrdAnalysisService {
       const modelState = this.models.state;
       if (modelState.status !== 'READY') throw new ModelFailure(modelState.status);
       if (modelState.selected.id !== selected.id) throw new ModelFailure('SELECTION_REQUIRED');
-      const response = await this.gateway.sendRequest(selected.id, compilePrdAnalysisPrompt(source.document.text), token, {
-        purpose: 'prdAnalysis', expectedModel: { vendor: selected.vendor, family: selected.family }, maxResponseCharacters: MAX_ANALYSIS_RESPONSE_CHARACTERS, outputHeadroomTokens: 4096,
+      const prompt = compilePrdAnalysisPrompt(source.document.text);
+      analysisDiagnostic(this.log, 'request', { modelId: selected.id, vendor: selected.vendor, family: selected.family, prdPath: source.input.relativePath, prdCharacters: source.document.text.length, prdBytes: source.document.sizeBytes, promptCharacters: prompt.length, outputHeadroomTokens: 8192 });
+      stage = 'stream collection'; requested = true;
+      const response = await this.gateway.sendRequest(selected.id, prompt, token, {
+        purpose: 'prdAnalysis', expectedModel: { vendor: selected.vendor, family: selected.family }, maxResponseCharacters: MAX_ANALYSIS_RESPONSE_CHARACTERS, outputHeadroomTokens: 8192,
       });
       checkCancellation(token);
-      const content = canonicalizeRequirements(validateRequirementsContent(parseAnalysisResponse(response), source.document.text));
+      analysisDiagnostic(this.log, 'response collected', { responseCharacters: response.length });
+      stage = 'response extraction / JSON parsing'; analysisDiagnostic(this.log, stage);
+      const parsed = parseAnalysisResponse(response);
+      stage = 'raw validation / safe normalization'; analysisDiagnostic(this.log, stage);
+      const candidate = validateRawModelStructure(parsed);
+      stage = 'source quote verification'; analysisDiagnostic(this.log, stage);
+      const raw = verifyModelSourceReferences(candidate, source.document.text);
+      analysisDiagnostic(this.log, 'source quotes verified');
+      stage = 'canonicalization'; analysisDiagnostic(this.log, stage);
+      const content = canonicalizeRequirements(raw);
+      stage = 'final artifact validation'; analysisDiagnostic(this.log, stage);
       const artifact = validateRequirementsArtifact({
         schemaVersion: 1,
         generated: { generatedAt: this.now().toISOString(), projectId: snapshot.project.id,
@@ -113,10 +133,21 @@ export class PrdAnalysisService {
         checkCancellation(token);
       };
       await beforeCommit();
+      stage = 'YAML persistence'; analysisDiagnostic(this.log, stage);
       await this.requirements.write(workspace, artifact, beforeCommit);
+      analysisDiagnostic(this.log, 'completed');
       // Rename is the commit point. Cancellation after commit cannot truthfully undo a completed write.
     } catch (error) {
-      const failure = token.isCancellationRequested ? new AnalysisFailure('CANCELLED') : safeAnalysisFailure(error);
+      let failure = token.isCancellationRequested ? new AnalysisFailure('CANCELLED') : safeAnalysisFailure(error);
+      analysisDiagnostic(this.log, 'failed', { stage, code: failure.code, ...(error instanceof AnalysisValidationFailure ? { ...error.diagnostic } : {}) });
+      if (requested && failure.code !== 'CANCELLED') {
+        const existing = await this.requirements.read(workspace).then((artifact) => artifact ? 'present' : 'absent').catch(() => 'unknown');
+        const outcome = existing === 'present' ? 'Analysis failed. The previous requirements artifact was preserved.'
+          : existing === 'absent' ? 'Analysis failed. No requirements artifact was created.'
+          : 'Analysis failed. The existing requirements artifact could not be verified.';
+        const guidance = failure.code === 'CHANGED' ? ' Re-import the changed PRD before analyzing.' : ' See DevPilot Output for diagnostics.';
+        failure.message = outcome + guidance;
+      }
       if (failure.code !== 'CANCELLED') {
         snapshot ??= await this.projects.read(workspace).catch(() => undefined);
         if (snapshot) this.failures.set(workspace.key, { signature: signature(snapshot), message: failure.message });

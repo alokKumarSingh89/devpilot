@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { RequirementsContent } from '../../domain/requirements/requirements';
+import type { RequirementsContent, VerifiedRequirementsAnalysis } from '../../domain/requirements/requirements';
 import { validateRequirementsContent } from '../../domain/requirements/validateRequirements';
 
 /** Content-derived IDs survive array reordering and model-proposed ID changes, but not semantic rewording. */
@@ -9,9 +9,9 @@ function canonicalId(prefix: string, identity: string): string {
   const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 12).toUpperCase();
   return `${prefix}-${slug}-${hash}`;
 }
-export function canonicalizeRequirements(content: RequirementsContent): RequirementsContent {
-  const actors = content.actors.map((actor) => ({ ...actor, id: canonicalId('ACTOR', actor.name) }));
-  const actorIds = new Map(content.actors.map((actor, index) => [actor.id, actors[index]?.id ?? actor.id]));
+export function canonicalizeRequirements(content: RequirementsContent | VerifiedRequirementsAnalysis): RequirementsContent {
+  const actors = content.actors.map((actor) => ({ name: actor.name, description: actor.description, id: canonicalId('ACTOR', actor.name) }));
+  const actorIds = new Map(content.actors.map((actor, index) => ['key' in actor ? actor.key : actor.id, actors[index]?.id ?? '']));
   const result: RequirementsContent = {
     ...content, actors,
     functionalRequirements: content.functionalRequirements.map((item) => ({ ...item, id: canonicalId('FR', item.title), actorIds: item.actorIds.map((id) => actorIds.get(id) ?? id) })),

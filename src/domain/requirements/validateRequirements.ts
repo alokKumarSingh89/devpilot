@@ -1,3 +1,5 @@
+import { AnalysisValidationFailure, diagnosticFailure, requirementsContract, validateContract } from './analysisContract';
+import { SourceTraceabilityVerifier } from './SourceTraceabilityVerifier';
 import { documentFormat, validateDocumentPath } from '../documentPath';
 import { AnalysisFailure } from './AnalysisFailure';
 import { CONFIDENCES, CONSTRAINT_CATEGORIES, MAX_EVIDENCE_LENGTH, NFR_CATEGORIES, PRIORITIES, type RequirementsArtifact, type RequirementsContent, type SourceReference } from './requirements';
@@ -26,17 +28,16 @@ function id(value: unknown, prefix: string): string {
   if (!new RegExp(`^${prefix}-[A-Z0-9]+(?:-[A-Z0-9]+)*$`).test(result)) return invalid();
   return result;
 }
-const normalize = (value: string): string => value.replace(/\s+/g, ' ').trim();
 const contentKeys = ['product', 'actors', 'functionalRequirements', 'nonFunctionalRequirements', 'constraints', 'outOfScope', 'openQuestions'] as const;
 
 /** Strict reconstruction; evidence must occur in the actual PRD when validating a new analysis. */
 export function validateRequirementsContent(value: unknown, prd?: string): RequirementsContent {
-  const root = record(value, contentKeys);
-  const source = prd === undefined ? undefined : normalize(prd);
+  const root = record(validateContract(value, requirementsContract(true)), contentKeys);
+  const source = prd === undefined ? undefined : new SourceTraceabilityVerifier(prd);
   const refs = (value: unknown): SourceReference[] => list(value, (entry) => {
     const data = record(entry, ['section', 'evidence']);
     const evidence = text(data.evidence, MAX_EVIDENCE_LENGTH);
-    if (source !== undefined && !source.includes(normalize(evidence))) return invalid();
+    if (source !== undefined && source.verifyQuote(evidence).result !== 'VERIFIED') return invalid();
     return { section: text(data.section, 200), evidence };
   }, 1, 5);
   const product = record(root.product, ['name', 'summary']);
@@ -76,8 +77,14 @@ export function validateRequirementsContent(value: unknown, prd?: string): Requi
     const data = record(entry, ['id', 'question', 'sourceReferences']);
     return { id: id(data.id, 'QUESTION'), question: text(data.question), sourceReferences: refs(data.sourceReferences) };
   });
-  const ids = [...actors, ...functionalRequirements, ...nonFunctionalRequirements, ...constraints, ...outOfScope, ...openQuestions].map((item) => item.id);
-  if (new Set(ids).size !== ids.length) return invalid();
+  const seen = new Set<string>();
+  for (const collection of ['actors', 'functionalRequirements', 'nonFunctionalRequirements', 'constraints', 'outOfScope', 'openQuestions'] as const) {
+    const items = { actors, functionalRequirements, nonFunctionalRequirements, constraints, outOfScope, openQuestions }[collection];
+    items.forEach((item, index) => {
+      if (seen.has(item.id)) diagnosticFailure(`${collection}[${index}].id`, 'unique canonical identity', item.id, 'Duplicate semantic identity or canonical ID collision');
+      seen.add(item.id);
+    });
+  }
   return { product: { name: text(product.name, 160), summary: text(product.summary, 3000) }, actors, functionalRequirements, nonFunctionalRequirements, constraints, outOfScope, openQuestions };
 }
 
@@ -102,5 +109,8 @@ export function validateRequirementsArtifact(value: unknown): RequirementsArtifa
       generated: { generatedAt, projectId, model: { id: text(model.id, 1024), vendor: text(model.vendor, 1024), family: text(model.family, 1024) }, source: { relativePath, contentHash } },
       ...content,
     };
-  } catch { throw new AnalysisFailure('INVALID_ARTIFACT'); }
+  } catch (error) {
+    if (error instanceof AnalysisValidationFailure) throw new AnalysisValidationFailure(error.diagnostic, 'INVALID_ARTIFACT');
+    throw new AnalysisFailure('INVALID_ARTIFACT');
+  }
 }
